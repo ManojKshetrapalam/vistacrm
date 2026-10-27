@@ -91,30 +91,34 @@ class FollowUpController extends Controller
         ]);
 
         $assigneeId = $user->isAdmin() ? ($validated['user_id'] ?? $lead->assigned_to ?? $user->id) : $user->id;
+        $dueUtc = FollowUp::parseToUtc($validated['scheduled_at']);
 
         $followUp = FollowUp::create([
             'lead_id' => $lead->id,
             'user_id' => $assigneeId,
-            'scheduled_at' => $validated['scheduled_at'],
+            'scheduled_at' => $dueUtc,
             'status' => 'pending',
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $lead->next_follow_up_date = $validated['scheduled_at'];
+        $lead->next_follow_up_date = $dueUtc;
         if ($lead->status === 'new' || $lead->status === 'assigned') {
             $lead->status = 'follow_up';
         }
         $lead->save();
+
+        $formattedTimeIst = $dueUtc->copy()->setTimezone('Asia/Kolkata')->format('d M Y, h:i A');
 
         LeadActivity::create([
             'lead_id' => $lead->id,
             'user_id' => $user->id,
             'activity_type' => 'follow_up_scheduled',
             'title' => 'Follow-up Scheduled',
-            'description' => "Scheduled for " . Carbon::parse($validated['scheduled_at'])->format('d M Y, h:i A') . ". " . ($validated['notes'] ?? ''),
+            'description' => "Scheduled for {$formattedTimeIst} IST. " . ($validated['notes'] ?? ''),
             'metadata' => [
                 'follow_up_id' => $followUp->id,
-                'scheduled_at' => $validated['scheduled_at'],
+                'scheduled_at' => $dueUtc->toIso8601String(),
+                'scheduled_at_ist' => $formattedTimeIst,
             ],
         ]);
 
@@ -139,7 +143,8 @@ class FollowUpController extends Controller
             'status' => 'nullable|in:pending,snoozed,cancelled',
         ]);
 
-        $followUp->scheduled_at = $validated['scheduled_at'];
+        $dueUtc = FollowUp::parseToUtc($validated['scheduled_at']);
+        $followUp->scheduled_at = $dueUtc;
         if (array_key_exists('notes', $validated)) {
             $followUp->notes = $validated['notes'];
         }
@@ -148,10 +153,12 @@ class FollowUpController extends Controller
         }
         $followUp->save();
 
+        $formattedTimeIst = $dueUtc->copy()->setTimezone('Asia/Kolkata')->format('d M Y, h:i A');
+
         // Update lead's next follow up date
         $lead = $followUp->lead;
         if ($lead) {
-            $lead->next_follow_up_date = $validated['scheduled_at'];
+            $lead->next_follow_up_date = $dueUtc;
             $lead->save();
 
             LeadActivity::create([
@@ -159,10 +166,11 @@ class FollowUpController extends Controller
                 'user_id' => $user->id,
                 'activity_type' => 'follow_up_scheduled',
                 'title' => 'Follow-up Rescheduled',
-                'description' => "Rescheduled to " . Carbon::parse($validated['scheduled_at'])->format('d M Y, h:i A'),
+                'description' => "Rescheduled to {$formattedTimeIst} IST",
                 'metadata' => [
                     'follow_up_id' => $followUp->id,
-                    'rescheduled_at' => $validated['scheduled_at'],
+                    'rescheduled_at' => $dueUtc->toIso8601String(),
+                    'rescheduled_at_ist' => $formattedTimeIst,
                 ],
             ]);
         }
@@ -189,7 +197,7 @@ class FollowUpController extends Controller
             'lead_status' => 'nullable|in:new,assigned,contacted,follow_up,interested,converted,lost,not_reachable',
         ]);
 
-        $now = Carbon::now();
+        $now = Carbon::now('UTC');
         $followUp->status = 'completed';
         $followUp->completed_at = $now;
         $followUp->outcome = $validated['outcome'];
@@ -206,12 +214,13 @@ class FollowUpController extends Controller
             }
 
             if (!empty($validated['next_follow_up_date'])) {
-                $lead->next_follow_up_date = $validated['next_follow_up_date'];
+                $nextDueUtc = FollowUp::parseToUtc($validated['next_follow_up_date']);
+                $lead->next_follow_up_date = $nextDueUtc;
                 // Schedule the next follow-up
                 FollowUp::create([
                     'lead_id' => $lead->id,
                     'user_id' => $followUp->user_id,
-                    'scheduled_at' => $validated['next_follow_up_date'],
+                    'scheduled_at' => $nextDueUtc,
                     'status' => 'pending',
                     'notes' => "Next follow-up following: {$validated['outcome']}",
                 ]);
@@ -236,6 +245,87 @@ class FollowUpController extends Controller
         return response()->json([
             'message' => 'Follow-up marked as completed',
             'follow_up' => $followUp,
+        ]);
+    }
+
+    public function outstanding(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $query = FollowUp::with([
+            'lead:id,reference_id,name,phone,phone_normalized,email,company_name,service_interest,status,priority,assigned_to',
+            'user:id,name,email',
+        ])->where('status', 'pending');
+
+        if (!$user->isAdmin()) {
+            $query->where('user_id', $user->id);
+        }
+
+        $allPending = $query->orderBy('scheduled_at', 'asc')->get();
+
+        $nowUtc = Carbon::now('UTC');
+        $endOfTodayUtc = Carbon::today('Asia/Kolkata')->endOfDay()->utc();
+
+        $overdue = [];
+        $dueToday = [];
+        $upcoming = [];
+
+        foreach ($allPending as $item) {
+            $due = $item->scheduled_at;
+            if ($due->lessThan($nowUtc)) {
+                $overdue[] = $item;
+            } elseif ($due->greaterThan($endOfTodayUtc)) {
+                $upcoming[] = $item;
+            } else {
+                $dueToday[] = $item;
+            }
+        }
+
+        return response()->json([
+            'total' => $allPending->count(),
+            'counts' => [
+                'overdue' => count($overdue),
+                'due_today' => count($dueToday),
+                'upcoming' => count($upcoming),
+            ],
+            'overdue' => $overdue,
+            'due_today' => $dueToday,
+            'upcoming' => $upcoming,
+        ]);
+    }
+
+    public function activeReminders(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $reminders = \App\Models\NotificationLog::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->where('is_read', false)
+            ->with(['followUp.lead:id,reference_id,name,phone,company_name,service_interest'])
+            ->latest()
+            ->take(10)
+            ->get();
+
+        return response()->json([
+            'data' => $reminders,
+            'count' => $reminders->count(),
+        ]);
+    }
+
+    public function acknowledgeReminder(Request $request, \App\Models\NotificationLog $notification): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->isAdmin() && $notification->user_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $notification->is_read = true;
+        $notification->save();
+
+        return response()->json([
+            'message' => 'Reminder acknowledged',
+            'notification' => $notification,
         ]);
     }
 }

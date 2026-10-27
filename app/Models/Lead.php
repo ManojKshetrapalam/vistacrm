@@ -40,6 +40,24 @@ class Lead extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (Lead $lead) {
+            if ($lead->phone && !$lead->phone_normalized) {
+                $lead->phone_normalized = static::normalizePhone($lead->phone);
+            }
+            if (!$lead->reference_id) {
+                $lead->reference_id = static::generateReferenceId();
+            }
+        });
+
+        static::updating(function (Lead $lead) {
+            if ($lead->isDirty('phone')) {
+                $lead->phone_normalized = static::normalizePhone($lead->phone);
+            }
+        });
+    }
+
     public static function normalizePhone(?string $phone): string
     {
         if (!$phone) {

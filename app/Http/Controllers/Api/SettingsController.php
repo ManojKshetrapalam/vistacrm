@@ -4,10 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CrmSetting;
+use App\Models\FollowUp;
+use App\Models\NotificationLog;
 use App\Models\User;
 use App\Models\WhatsappTemplate;
+use App\Services\WhatsApp\WhatsAppManager;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SettingsController extends Controller
 {
@@ -146,5 +151,77 @@ class SettingsController extends Controller
         $template->delete();
 
         return response()->json(['message' => 'Template deleted successfully.']);
+    }
+
+    public function diagnostics(Request $request, WhatsAppManager $whatsAppManager): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $nowUtc = Carbon::now('UTC');
+        $nowIst = Carbon::now('Asia/Kolkata');
+
+        $totalFollowUps = FollowUp::count();
+        $pendingFollowUps = FollowUp::where('status', 'pending')->count();
+        $overdueFollowUps = FollowUp::where('status', 'pending')->where('scheduled_at', '<', $nowUtc)->count();
+        $pendingRemindersDue = FollowUp::where('status', 'pending')
+            ->where('reminder_status', 'pending')
+            ->whereNotNull('reminder_at')
+            ->where('reminder_at', '<=', $nowUtc)
+            ->count();
+        $overdueUnsentReminders = FollowUp::where('status', 'pending')
+            ->where('reminder_status', 'pending')
+            ->where('scheduled_at', '<', $nowUtc)
+            ->count();
+
+        $queueBacklog = DB::table('jobs')->count();
+        $failedJobs = DB::table('failed_jobs')->count();
+
+        $whatsAppStatus = $whatsAppManager->getStatusSummary();
+
+        $recentLogs = NotificationLog::where(function ($q) {
+                $q->where('channel', 'like', '%whatsapp%')
+                  ->orWhere('channel', 'in_app');
+            })
+            ->with(['user:id,name', 'followUp:id,lead_id,scheduled_at'])
+            ->latest()
+            ->take(15)
+            ->get()
+            ->map(function ($log) {
+                return [
+                    'id' => $log->id,
+                    'follow_up_id' => $log->follow_up_id,
+                    'user_name' => $log->user?->name ?? 'System',
+                    'channel' => $log->channel,
+                    'status' => $log->status,
+                    'title' => $log->title,
+                    'reminder_key' => $log->reminder_key,
+                    'created_at_ist' => $log->created_at?->setTimezone('Asia/Kolkata')->format('d M Y, h:i:s A'),
+                    'metadata' => $log->metadata,
+                ];
+            });
+
+        return response()->json([
+            'server_time' => [
+                'utc' => $nowUtc->toIso8601String(),
+                'ist' => $nowIst->format('d M Y, h:i:s A') . ' IST',
+            ],
+            'follow_ups' => [
+                'total' => $totalFollowUps,
+                'pending' => $pendingFollowUps,
+                'overdue' => $overdueFollowUps,
+                'pending_reminders_due' => $pendingRemindersDue,
+                'overdue_unsent_reminders' => $overdueUnsentReminders,
+            ],
+            'queue' => [
+                'pending_jobs' => $queueBacklog,
+                'failed_jobs' => $failedJobs,
+                'scheduler_interval' => '1 minute (* * * * *)',
+            ],
+            'whatsapp' => $whatsAppStatus,
+            'recent_logs' => $recentLogs,
+        ]);
     }
 }

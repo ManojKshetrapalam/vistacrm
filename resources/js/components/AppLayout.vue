@@ -221,6 +221,12 @@
         </main>
       </div>
     </div>
+
+    <!-- Outstanding Follow-up Briefing (on login/session load) -->
+    <LoginFollowUpModal />
+
+    <!-- Active Real-time Reminder Alert Modal -->
+    <ActiveReminderModal />
   </div>
 </template>
 
@@ -229,6 +235,8 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
+import LoginFollowUpModal from './LoginFollowUpModal.vue';
+import ActiveReminderModal from './ActiveReminderModal.vue';
 import {
   LayoutDashboard,
   Users,

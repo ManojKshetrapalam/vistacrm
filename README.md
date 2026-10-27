@@ -4,11 +4,12 @@
 The **Vistabound Temporary Lead Management CRM** is a production-ready, standalone internal CRM built for **Vistabound Integrated Solutions LLP** (official website: [vistaboundintegrated.com](https://vistaboundintegrated.com/)). The system empowers a 1–5 person client solutions team to manage inbound leads across multiple business verticals (IT Infrastructure & Hardware AMC, Cloud & DevOps, Enterprise Software, Incubation, Hospitality, and Commerce), execute bulk Excel/CSV file imports with duplicate protection, schedule and complete follow-ups, launch 1-click WhatsApp outreach with templated messaging, track activity timelines, and inspect operational metrics.
 
 ## Current Status
-- **Core Functionality**: Complete & Verified (Authentication, Role-Based Access Control, Pipeline Data Table, Lead Detail View & Chronological Timeline, Call Logging, Follow-up Scheduler, Excel/CSV Ingestion Wizard, WhatsApp Template Engine, and Notification Delivery Logs).
-- **Automated Tests**: 8 tests / 52 assertions passing cleanly (`tests/Feature/CrmWorkflowTest.php`, `tests/Feature/LeadImportWorkflowTest.php`).
+- **Core Functionality**: Complete & Verified (Authentication, Role-Based Access Control, Pipeline Data Table, Lead Detail View & Chronological Timeline, Call Logging, Follow-up Scheduler with 5-minute pre-due reminder engine & late-scheduling policy, Login Briefing Popup Modal, Real-time In-app Reminder Alert, Excel/CSV Ingestion Wizard, WhatsApp Multi-Provider Engine with Mock & Meta Cloud API support, and Notification Delivery Logs).
+- **Automated Tests**: 17 tests / 121 assertions passing cleanly (100% test pass rate across `FollowUpReminderTest`, `CrmWorkflowTest`, and `LeadImportWorkflowTest`).
 - **Brand Identity**: Complete fidelity with official Vistabound assets (original logo, Sora & Source Sans 3 typography, CSS variable design tokens, pill buttons, glassmorphic cards, spectrum accent gradients).
 - **PWA & Mobile**: Responsive layout, Web App Manifest (`public/manifest.json`), Service Worker (`public/sw.js`).
-- **Deployment**: Production Nginx configuration, Supervisor queue supervisor configuration, cron runner, and automated database backup script prepared in `deploy/` and `scripts/`.
+- **Diagnostics & Monitoring**: Full diagnostic command `php artisan leads:diagnostics` and admin-visible Diagnostics panel in Settings.
+- **Deployment**: Production Nginx configuration, Supervisor queue supervisor configuration, cron runner (1-minute cadence), and automated database backup script prepared in `deploy/` and `scripts/`.
 
 ---
 
@@ -177,12 +178,26 @@ The database seeder provisions initial accounts with secure password `Vistabound
 
 ## Running Automated Tests
 ```bash
-# Run all feature and unit tests
+# Run all feature and unit tests (17 tests / 121 assertions)
 php artisan test
 
-# Run specific workflow tests
+# Run follow-up reminder test suite (Tests A through I)
+php artisan test --filter=FollowUpReminderTest
+
+# Run general workflows & import tests
 php artisan test --filter=CrmWorkflowTest
 php artisan test --filter=LeadImportWorkflowTest
+```
+
+---
+
+## Diagnostics & Operations Commands
+```bash
+# Display system diagnostics, follow-up metrics, queue health & delivery logs in Asia/Kolkata timestamps
+php artisan leads:diagnostics
+
+# Scan eligible follow-ups and trigger 5-minute pre-due reminders (executed minutely by scheduler)
+php artisan leads:check-followups
 ```
 
 ---

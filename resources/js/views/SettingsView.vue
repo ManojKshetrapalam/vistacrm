@@ -166,6 +166,125 @@
           </div>
         </div>
       </div>
+
+      <!-- System Diagnostics & Reminder Monitor -->
+      <div class="card-glass p-6 space-y-6">
+        <div class="flex items-center justify-between border-b border-vb-plum/10 pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold uppercase tracking-widest text-vb-violet font-display">System Health</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                Scheduler: 1 Min
+              </span>
+            </div>
+            <h3 class="font-display font-bold text-base text-vb-plum mt-0.5">Follow-up Reminders &amp; Integration Diagnostics</h3>
+            <p class="text-xs text-vb-muted">
+              Real-time monitoring of follow-up reminder timers, WhatsApp delivery channels, queue backlogs, and scheduler state.
+            </p>
+          </div>
+
+          <button
+            @click="fetchDiagnostics"
+            :disabled="diagnosticsLoading"
+            class="px-3.5 py-2 rounded-xl border border-vb-plum/20 bg-white hover:bg-vb-cream text-xs font-semibold text-vb-plum flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': diagnosticsLoading }" />
+            <span>{{ diagnosticsLoading ? 'Refreshing...' : 'Refresh Status' }}</span>
+          </button>
+        </div>
+
+        <div v-if="diagnostics" class="space-y-6">
+          <!-- Timestamps & Timezones Card -->
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="p-4 rounded-2xl bg-white border border-vb-plum/10 space-y-1">
+              <span class="text-[11px] font-semibold text-vb-muted uppercase tracking-wider">Local Business Time (IST)</span>
+              <p class="text-sm font-bold text-vb-plum font-mono">{{ diagnostics.server_time?.ist }}</p>
+              <p class="text-[10px] text-vb-muted">Default application timezone for follow-up schedules</p>
+            </div>
+            <div class="p-4 rounded-2xl bg-white border border-vb-plum/10 space-y-1">
+              <span class="text-[11px] font-semibold text-vb-muted uppercase tracking-wider">Database Storage Time (UTC)</span>
+              <p class="text-sm font-bold text-vb-ink font-mono">{{ diagnostics.server_time?.utc }}</p>
+              <p class="text-[10px] text-vb-muted">Standard normalized UTC timestamp storage</p>
+            </div>
+          </div>
+
+          <!-- Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="p-3.5 rounded-xl bg-white border border-vb-plum/10 text-center">
+              <span class="text-[10px] uppercase font-bold text-vb-muted tracking-wider block">Pending Tasks</span>
+              <span class="text-xl font-bold font-display text-vb-plum">{{ diagnostics.follow_ups?.pending }}</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-white border border-vb-plum/10 text-center">
+              <span class="text-[10px] uppercase font-bold text-vb-muted tracking-wider block">Overdue Tasks</span>
+              <span class="text-xl font-bold font-display text-rose-600">{{ diagnostics.follow_ups?.overdue }}</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-white border border-vb-plum/10 text-center">
+              <span class="text-[10px] uppercase font-bold text-vb-muted tracking-wider block">Reminders Due</span>
+              <span class="text-xl font-bold font-display text-vb-amber">{{ diagnostics.follow_ups?.pending_reminders_due }}</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-white border border-vb-plum/10 text-center">
+              <span class="text-[10px] uppercase font-bold text-vb-muted tracking-wider block">Queue Backlog</span>
+              <span class="text-xl font-bold font-display text-vb-teal">{{ diagnostics.queue?.pending_jobs }}</span>
+            </div>
+          </div>
+
+          <!-- WhatsApp Channel Status Card -->
+          <div class="p-4 rounded-2xl bg-white border border-vb-plum/10 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-xs text-vb-plum font-display">WhatsApp Notification Channel:</span>
+                <span
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  :class="diagnostics.whatsapp?.configured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
+                >
+                  {{ diagnostics.whatsapp?.status }}
+                </span>
+              </div>
+              <span class="text-xs font-mono text-vb-muted">Driver: {{ diagnostics.whatsapp?.driver }}</span>
+            </div>
+            <p class="text-xs text-vb-muted leading-relaxed">
+              {{ diagnostics.whatsapp?.advisory }}
+            </p>
+          </div>
+
+          <!-- Recent Logs Table -->
+          <div class="space-y-2">
+            <span class="text-xs font-bold text-vb-plum uppercase tracking-wider block">Recent Reminder Delivery Logs</span>
+            <div class="overflow-x-auto rounded-xl border border-vb-plum/10 bg-white">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-vb-cream/50 border-b border-vb-plum/10 text-[11px] font-bold text-vb-muted uppercase tracking-wider">
+                  <tr>
+                    <th class="p-2.5">Time (IST)</th>
+                    <th class="p-2.5">Follow-up</th>
+                    <th class="p-2.5">Recipient</th>
+                    <th class="p-2.5">Channel</th>
+                    <th class="p-2.5">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-vb-plum/5">
+                  <tr v-if="!diagnostics.recent_logs?.length">
+                    <td colspan="5" class="p-4 text-center text-vb-muted">No recent reminder logs.</td>
+                  </tr>
+                  <tr v-for="log in diagnostics.recent_logs" :key="log.id" class="hover:bg-vb-cream/20">
+                    <td class="p-2.5 font-mono text-vb-muted">{{ log.created_at_ist }}</td>
+                    <td class="p-2.5 font-medium text-vb-plum">FU #{{ log.follow_up_id || 'N/A' }}</td>
+                    <td class="p-2.5 font-semibold text-vb-ink">{{ log.user_name }}</td>
+                    <td class="p-2.5 font-mono text-[11px] text-vb-violet">{{ log.channel }}</td>
+                    <td class="p-2.5">
+                      <span
+                        class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                        :class="log.status === 'delivered' || log.status === 'sent' ? 'bg-emerald-100 text-emerald-800' : (log.status === 'simulated' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800')"
+                      >
+                        {{ log.status }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Template Modal (Add / Edit) -->
@@ -218,7 +337,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import api from '../api/axios';
 import AppLayout from '../components/AppLayout.vue';
-import { Trash2, Plus } from 'lucide-vue-next';
+import { Trash2, Plus, RefreshCw } from 'lucide-vue-next';
 
 const leadSources = ref<string[]>([]);
 const serviceCategories = ref<string[]>([]);
@@ -329,7 +448,23 @@ const deleteTemplate = async (tmpl: any) => {
   }
 };
 
+const diagnostics = ref<any>(null);
+const diagnosticsLoading = ref(false);
+
+const fetchDiagnostics = async () => {
+  diagnosticsLoading.value = true;
+  try {
+    const res = await api.get('/settings/diagnostics');
+    diagnostics.value = res.data;
+  } catch (err) {
+    console.error('Failed to fetch diagnostics:', err);
+  } finally {
+    diagnosticsLoading.value = false;
+  }
+};
+
 onMounted(() => {
   fetchSettings();
+  fetchDiagnostics();
 });
 </script>

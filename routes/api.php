@@ -37,6 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Follow-ups
     Route::get('/follow-ups', [FollowUpController::class, 'index']);
+    Route::get('/follow-ups/outstanding', [FollowUpController::class, 'outstanding']);
+    Route::get('/follow-ups/active-reminders', [FollowUpController::class, 'activeReminders']);
+    Route::post('/follow-ups/reminders/{notification}/acknowledge', [FollowUpController::class, 'acknowledgeReminder']);
     Route::post('/leads/{lead}/follow-ups', [FollowUpController::class, 'store']);
     Route::put('/follow-ups/{followUp}', [FollowUpController::class, 'update']);
     Route::post('/follow-ups/{followUp}/complete', [FollowUpController::class, 'complete']);
@@ -66,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // CRM Settings & Templates (Admin only)
     Route::get('/settings', [SettingsController::class, 'getSettings']);
+    Route::get('/settings/diagnostics', [SettingsController::class, 'diagnostics']);
     Route::post('/settings', [SettingsController::class, 'updateSettings']);
     Route::post('/settings/templates', [SettingsController::class, 'storeTemplate']);
     Route::put('/settings/templates/{template}', [SettingsController::class, 'updateTemplate']);

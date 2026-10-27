@@ -12,7 +12,9 @@ class NotificationLog extends Model
 
     protected $fillable = [
         'lead_id',
+        'follow_up_id',
         'user_id',
+        'reminder_key',
         'channel',
         'recipient',
         'title',
@@ -39,5 +41,10 @@ class NotificationLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function followUp(): BelongsTo
+    {
+        return $this->belongsTo(FollowUp::class, 'follow_up_id');
     }
 }

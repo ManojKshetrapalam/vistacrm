@@ -222,21 +222,31 @@ class LeadController extends Controller
 
         // If follow-up date specified, create follow-up
         if (!empty($validated['next_follow_up_date'])) {
-            FollowUp::create([
+            $dueUtc = FollowUp::parseToUtc($validated['next_follow_up_date']);
+            $lead->next_follow_up_date = $dueUtc;
+            $lead->save();
+
+            $followUp = FollowUp::create([
                 'lead_id' => $lead->id,
                 'user_id' => $assigneeId ?: $user->id,
-                'scheduled_at' => $validated['next_follow_up_date'],
+                'scheduled_at' => $dueUtc,
                 'status' => 'pending',
                 'notes' => 'Initial follow-up scheduled on lead creation.',
             ]);
+
+            $formattedIst = $dueUtc->copy()->setTimezone('Asia/Kolkata')->format('d M Y, h:i A');
 
             LeadActivity::create([
                 'lead_id' => $lead->id,
                 'user_id' => $user->id,
                 'activity_type' => 'follow_up_scheduled',
                 'title' => 'Follow-up scheduled',
-                'description' => "Scheduled for " . Carbon::parse($validated['next_follow_up_date'])->format('d M Y, h:i A'),
-                'metadata' => ['scheduled_at' => $validated['next_follow_up_date']],
+                'description' => "Scheduled for {$formattedIst} IST",
+                'metadata' => [
+                    'follow_up_id' => $followUp->id,
+                    'scheduled_at' => $dueUtc->toIso8601String(),
+                    'scheduled_at_ist' => $formattedIst,
+                ],
             ]);
         }
 
@@ -437,12 +447,13 @@ class LeadController extends Controller
         }
 
         if (!empty($validated['next_follow_up_date'])) {
-            $lead->next_follow_up_date = $validated['next_follow_up_date'];
+            $dueUtc = FollowUp::parseToUtc($validated['next_follow_up_date']);
+            $lead->next_follow_up_date = $dueUtc;
             // Create follow-up
             FollowUp::create([
                 'lead_id' => $lead->id,
                 'user_id' => $user->id,
-                'scheduled_at' => $validated['next_follow_up_date'],
+                'scheduled_at' => $dueUtc,
                 'status' => 'pending',
                 'notes' => "Scheduled following call outcome: {$validated['outcome']}. " . ($validated['notes'] ?? ''),
             ]);

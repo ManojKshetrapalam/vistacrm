@@ -1,0 +1,4 @@
+# Vistabound CRM - Laravel Scheduler Cron Definition
+# Run as www-data or crontab: crontab -e -u www-data
+
+* * * * * cd /var/www/vistabound-crm && php artisan schedule:run >> /dev/null 2>&1

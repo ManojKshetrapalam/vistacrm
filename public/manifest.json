@@ -1,0 +1,23 @@
+{
+  "name": "Vistabound CRM",
+  "short_name": "VB CRM",
+  "description": "Lead Management System for Vistabound Integrated Solutions LLP",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#3B0A32",
+  "icons": [
+    {
+      "src": "/favicon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

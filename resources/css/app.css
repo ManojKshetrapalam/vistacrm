@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --plum: #3B0A32;
+  --plum-2: #5B1450;
+  --violet: #7B2D8E;
+  --teal: #1E7FA8;
+  --cyan: #21A3C4;
+  --green: #4E9E4A;
+  --emerald: #2F8F6E;
+  --amber: #D9701F;
+  --cream: #F5F7FA;
+  --cream-2: #E5E7EB;
+  --ink: #111827;
+  --muted: #6B7280;
+  --spectrum: linear-gradient(90deg, #5B1450 0%, #7B2D8E 20%, #1E7FA8 42%, #21A3C4 56%, #4E9E4A 74%, #D9701F 100%);
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--ink);
+  font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: "Sora", system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.spectrum {
+  background: var(--spectrum);
+}
+
+.spectrum-text {
+  background: var(--spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.rule {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--spectrum);
+}
+
+.card-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(59, 10, 50, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.field {
+  width: 100%;
+  background: #ffffff;
+  border: 1.5px solid rgba(59, 10, 50, 0.14);
+  border-radius: 12px;
+  padding: 0.65rem 0.95rem;
+  font-size: 0.95rem;
+  color: var(--ink);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.field:focus {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(123, 45, 142, 0.15);
+}
+
+.btn-primary {
+  background: var(--plum);
+  color: #ffffff;
+  box-shadow: 0 12px 24px -12px rgba(59, 10, 50, 0.8);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--plum-2);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px -12px rgba(59, 10, 50, 0.9);
+}
+
+.btn-ghost {
+  border: 1.5px solid rgba(59, 10, 50, 0.25);
+  color: var(--plum);
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  border-color: var(--violet);
+  color: var(--violet);
+  background: rgba(123, 45, 142, 0.04);
+}

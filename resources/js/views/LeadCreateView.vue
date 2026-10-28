@@ -221,6 +221,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
+import { syncEngine, isOnline } from '../services/syncEngine';
 import AppLayout from '../components/AppLayout.vue';
 import { AlertTriangle, Check } from 'lucide-vue-next';
 
@@ -266,28 +267,37 @@ const handleSubmit = async () => {
   errorMsg.value = '';
   duplicateLead.value = null;
 
-  try {
-    const payload: any = {
-      name: form.name,
-      phone: form.phone,
-      email: form.email || null,
-      company_name: form.company_name || null,
-      source: form.source,
-      service_interest: form.service_interest || null,
-      status: form.status,
-      priority: form.priority,
-      assigned_to: form.assigned_to || null,
-      next_follow_up_date: form.next_follow_up_date || null,
-      additional_details: form.additional_details || null,
-      confirm_duplicate: confirmDuplicate.value,
-    };
+  const payload: any = {
+    name: form.name,
+    phone: form.phone,
+    email: form.email || null,
+    company_name: form.company_name || null,
+    source: form.source,
+    service_interest: form.service_interest || null,
+    status: form.status,
+    priority: form.priority,
+    assigned_to: form.assigned_to || null,
+    next_follow_up_date: form.next_follow_up_date || null,
+    additional_details: form.additional_details || null,
+    confirm_duplicate: confirmDuplicate.value,
+  };
 
-    const res = await api.post('/leads', payload);
-    router.push(`/leads/${res.data.lead.id}`);
+  try {
+    if (isOnline.value) {
+      const res = await api.post('/leads', payload);
+      router.push(`/leads/${res.data.lead.id}`);
+    } else {
+      await syncEngine.enqueueMutation('create_lead', undefined, payload);
+      router.push('/leads');
+    }
   } catch (err: any) {
     if (err.response?.status === 409 && err.response?.data?.duplicate) {
       duplicateLead.value = err.response.data.existing_lead;
       errorMsg.value = err.response.data.message;
+    } else if (!err.response) {
+      // Network failure, queue offline
+      await syncEngine.enqueueMutation('create_lead', undefined, payload);
+      router.push('/leads');
     } else {
       errorMsg.value = err.response?.data?.message || 'Failed to create lead.';
     }

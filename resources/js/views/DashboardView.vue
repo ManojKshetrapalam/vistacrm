@@ -305,7 +305,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
 import AppLayout from '../components/AppLayout.vue';
@@ -362,7 +362,16 @@ const formatDate = (dateStr: string) => {
   });
 };
 
+const handleLeadsUpdated = () => {
+  fetchMetrics();
+};
+
 onMounted(() => {
   fetchMetrics();
+  window.addEventListener('vb_crm_leads_updated', handleLeadsUpdated);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('vb_crm_leads_updated', handleLeadsUpdated);
 });
 </script>

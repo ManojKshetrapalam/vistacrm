@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeviceToken;
 use App\Models\FollowUp;
 use App\Models\Lead;
+use App\Models\LeadActivity;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -146,16 +149,92 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
+        // Prevent deactivating the last active administrator
+        if ($user->isAdmin() && $user->is_active) {
+            $activeAdminsCount = User::where('role', 'admin')->where('is_active', true)->count();
+            if ($activeAdminsCount <= 1) {
+                return response()->json(['message' => 'Cannot deactivate the last active administrator.'], 422);
+            }
+        }
+
         if ($user->id === $currentUser->id) {
-            return response()->json(['message' => 'You cannot change the active status of your own account.'], 422);
+            return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
+        }
+
+        $willDeactivate = $user->is_active;
+
+        if ($willDeactivate) {
+            // Invalidate active personal access tokens
+            $user->tokens()->delete();
+
+            // Invalidate mobile push device tokens
+            DeviceToken::where('user_id', $user->id)->delete();
         }
 
         $user->is_active = !$user->is_active;
         $user->save();
 
         return response()->json([
-            'message' => "Account " . ($user->is_active ? "activated" : "deactivated") . " successfully.",
+            'message' => "Account for {$user->name} " . ($user->is_active ? "reactivated" : "deactivated") . " successfully.",
             'is_active' => $user->is_active,
+            'user' => $user,
+        ]);
+    }
+
+    public function assignedLeads(Request $request, User $user): JsonResponse
+    {
+        $currentUser = $request->user();
+        if (!$currentUser->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $leads = Lead::where('assigned_to', $user->id)
+            ->select(['id', 'reference_id', 'name', 'company_name', 'status', 'priority', 'next_follow_up_date'])
+            ->get();
+
+        return response()->json([
+            'count' => $leads->count(),
+            'leads' => $leads,
+        ]);
+    }
+
+    public function reassignLeads(Request $request, User $user): JsonResponse
+    {
+        $currentUser = $request->user();
+        if (!$currentUser->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'new_user_id' => 'required|exists:users,id',
+        ]);
+
+        $newAssignee = User::findOrFail($validated['new_user_id']);
+        if (!$newAssignee->is_active) {
+            return response()->json(['message' => 'Target assignee must be an active user.'], 422);
+        }
+
+        $affectedCount = Lead::where('assigned_to', $user->id)->count();
+
+        DB::transaction(function () use ($user, $newAssignee, $currentUser) {
+            $leads = Lead::where('assigned_to', $user->id)->get();
+            foreach ($leads as $lead) {
+                $lead->assigned_to = $newAssignee->id;
+                $lead->save();
+
+                LeadActivity::create([
+                    'lead_id' => $lead->id,
+                    'user_id' => $currentUser->id,
+                    'activity_type' => 'assignment_change',
+                    'title' => "Reassigned to {$newAssignee->name}",
+                    'description' => "Account reassigned from {$user->name} to {$newAssignee->name} by {$currentUser->name}.",
+                ]);
+            }
+        });
+
+        return response()->json([
+            'message' => "Successfully reassigned {$affectedCount} leads to {$newAssignee->name}.",
+            'reassigned_count' => $affectedCount,
         ]);
     }
 }

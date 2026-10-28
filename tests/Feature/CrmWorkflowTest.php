@@ -20,8 +20,8 @@ class CrmWorkflowTest extends TestCase
     public function test_admin_can_login_and_access_dashboard(): void
     {
         $response = $this->postJson('/api/auth/login', [
-            'email' => 'admin@vistaboundintegrated.com',
-            'password' => 'Vistabound@2026',
+            'email' => 'admin',
+            'password' => 'Admin123',
         ]);
 
         $response->assertStatus(200)
@@ -31,6 +31,8 @@ class CrmWorkflowTest extends TestCase
             ]);
 
         $token = $response->json('token');
+        $this->assertEquals('admin', $response->json('user.username'));
+        $this->assertTrue($response->json('user.must_change_password'));
 
         $metricsResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/dashboard/metrics');

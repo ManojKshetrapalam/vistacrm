@@ -129,9 +129,10 @@
           </div>
 
           <!-- Bottom Action Buttons -->
-          <div v-if="item.status === 'pending'" class="pt-3 border-t border-vb-plum/10 flex flex-wrap items-center justify-between gap-2">
+          <div class="pt-3 border-t border-vb-plum/10 flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <button
+                v-if="item.lead?.phone"
                 @click="openWhatsApp(item.lead)"
                 title="WhatsApp Direct"
                 class="p-2 rounded-full text-emerald-600 hover:bg-emerald-50 border border-emerald-200"
@@ -139,6 +140,7 @@
                 <MessageSquare class="w-4 h-4" />
               </button>
               <a
+                v-if="item.lead?.phone"
                 :href="'tel:' + (item.lead?.phone || '')"
                 title="Call"
                 class="p-2 rounded-full text-vb-plum hover:bg-vb-plum/10 border border-vb-plum/20"
@@ -149,18 +151,26 @@
 
             <div class="flex items-center gap-2">
               <button
+                v-if="item.status === 'pending'"
                 @click="openRescheduleModal(item)"
                 class="px-3 py-1.5 rounded-full text-xs font-semibold text-vb-plum hover:bg-vb-cream border border-vb-plum/20"
               >
                 Reschedule
               </button>
               <button
+                v-if="item.status === 'pending'"
                 @click="openCompleteModal(item)"
                 class="btn-primary px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 shadow-sm"
               >
                 <Check class="w-3.5 h-3.5" />
                 <span>Complete Task</span>
               </button>
+
+              <!-- Actions Dropdown -->
+              <ActionMenu
+                :items="getFollowUpActions(item)"
+                title="Task Actions"
+              />
             </div>
           </div>
         </div>
@@ -268,6 +278,35 @@
         </div>
       </div>
     </div>
+    <!-- Cancel Follow-up Confirmation Modal -->
+    <ConfirmModal
+      :is-open="cancelModalOpen"
+      title="Cancel Follow-up Task"
+      :subtitle="`${activeFollowUp?.lead?.reference_id} · ${activeFollowUp?.lead?.name}`"
+      :message="`Are you sure you want to cancel the follow-up task scheduled for ${activeFollowUp?.scheduled_at_ist || 'this time'}?`"
+      consequences="Cancelling this task will deactivate any pending 5-minute Android reminders and record a cancellation activity on the client's timeline. You can schedule a new follow-up at any time."
+      confirm-text="Cancel Task"
+      variant="warning"
+      :is-submitting="actionSubmitting"
+      :error="actionError"
+      @confirm="executeCancelFollowUp"
+      @cancel="cancelModalOpen = false"
+    />
+
+    <!-- Delete Follow-up Record Confirmation Modal (Admin Only) -->
+    <ConfirmModal
+      :is-open="deleteModalOpen"
+      title="Delete Follow-up Record"
+      :subtitle="`Task #${activeFollowUp?.id} · ${activeFollowUp?.lead?.name}`"
+      :message="`Permanently delete follow-up task #${activeFollowUp?.id} from the system?`"
+      consequences="This follow-up record and its pending reminders will be permanently removed. The lead's next follow-up date will be recalculated from remaining active tasks."
+      confirm-text="Delete Record"
+      variant="danger"
+      :is-submitting="actionSubmitting"
+      :error="actionError"
+      @confirm="executeDeleteFollowUp"
+      @cancel="deleteModalOpen = false"
+    />
   </AppLayout>
 </template>
 
@@ -275,14 +314,21 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
+import { localNotificationService } from '../services/localNotifications';
 import AppLayout from '../components/AppLayout.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import WhatsAppModal from '../components/WhatsAppModal.vue';
+import ActionMenu, { ActionMenuItem } from '../components/ActionMenu.vue';
+import ConfirmModal from '../components/ConfirmModal.vue';
 import {
   CalendarCheck,
   Check,
   Phone,
   MessageSquare,
+  Eye,
+  CalendarClock,
+  Ban,
+  Trash2,
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
@@ -300,16 +346,22 @@ const activeLead = ref<any>(null);
 const whatsAppModalOpen = ref(false);
 
 const completeModalOpen = ref(false);
+const rescheduleModalOpen = ref(false);
+const cancelModalOpen = ref(false);
+const deleteModalOpen = ref(false);
+
 const activeFollowUp = ref<any>(null);
 const completing = ref(false);
+const rescheduling = ref(false);
+const actionSubmitting = ref(false);
+const actionError = ref('');
+
 const completeForm = reactive({
   outcome: 'Spoke & Follow-up Scheduled',
   notes: '',
   next_follow_up_date: '',
 });
 
-const rescheduleModalOpen = ref(false);
-const rescheduling = ref(false);
 const rescheduleForm = reactive({
   scheduled_at: '',
   notes: '',
@@ -357,6 +409,8 @@ const handleCompleteSubmit = async () => {
       notes: completeForm.notes,
       next_follow_up_date: completeForm.next_follow_up_date || null,
     });
+    // Cancel native Android hardware alarm
+    await localNotificationService.cancelReminder(activeFollowUp.value.id);
     completeModalOpen.value = false;
     await fetchFollowUps();
   } catch (err) {
@@ -377,10 +431,13 @@ const handleRescheduleSubmit = async () => {
   if (!activeFollowUp.value) return;
   rescheduling.value = true;
   try {
-    await api.put(`/follow-ups/${activeFollowUp.value.id}`, {
+    const res = await api.put(`/follow-ups/${activeFollowUp.value.id}`, {
       scheduled_at: rescheduleForm.scheduled_at,
       notes: rescheduleForm.notes,
     });
+    if (res.data?.follow_up) {
+      await localNotificationService.scheduleReminder(res.data.follow_up);
+    }
     rescheduleModalOpen.value = false;
     await fetchFollowUps();
   } catch (err) {
@@ -388,6 +445,102 @@ const handleRescheduleSubmit = async () => {
   } finally {
     rescheduling.value = false;
   }
+};
+
+const openCancelModal = (item: any) => {
+  activeFollowUp.value = item;
+  actionError.value = '';
+  cancelModalOpen.value = true;
+};
+
+const executeCancelFollowUp = async () => {
+  if (!activeFollowUp.value) return;
+  actionSubmitting.value = true;
+  actionError.value = '';
+
+  try {
+    await api.post(`/follow-ups/${activeFollowUp.value.id}/cancel`);
+    await localNotificationService.cancelReminder(activeFollowUp.value.id);
+    cancelModalOpen.value = false;
+    await fetchFollowUps();
+  } catch (err: any) {
+    actionError.value = err.response?.data?.message || 'Failed to cancel follow-up task.';
+  } finally {
+    actionSubmitting.value = false;
+  }
+};
+
+const openDeleteModal = (item: any) => {
+  activeFollowUp.value = item;
+  actionError.value = '';
+  deleteModalOpen.value = true;
+};
+
+const executeDeleteFollowUp = async () => {
+  if (!activeFollowUp.value) return;
+  actionSubmitting.value = true;
+  actionError.value = '';
+
+  try {
+    await api.delete(`/follow-ups/${activeFollowUp.value.id}`);
+    await localNotificationService.cancelReminder(activeFollowUp.value.id);
+    deleteModalOpen.value = false;
+    await fetchFollowUps();
+  } catch (err: any) {
+    actionError.value = err.response?.data?.message || 'Failed to delete follow-up record.';
+  } finally {
+    actionSubmitting.value = false;
+  }
+};
+
+const getFollowUpActions = (item: any): ActionMenuItem[] => {
+  const actions: ActionMenuItem[] = [
+    {
+      label: 'View Lead Profile',
+      icon: Eye,
+      to: `/leads/${item.lead?.id}`,
+    },
+  ];
+
+  if (item.status === 'pending') {
+    actions.push(
+      {
+        label: 'Reschedule Task',
+        icon: CalendarClock,
+        action: () => openRescheduleModal(item),
+      },
+      {
+        label: 'Complete Task',
+        icon: Check,
+        action: () => openCompleteModal(item),
+      },
+      {
+        divider: true,
+      },
+      {
+        label: 'Cancel Task',
+        icon: Ban,
+        warning: true,
+        action: () => openCancelModal(item),
+      }
+    );
+  }
+
+  if (authStore.isAdmin) {
+    actions.push(
+      {
+        divider: true,
+      },
+      {
+        label: 'Delete Follow-up Record',
+        icon: Trash2,
+        danger: true,
+        action: () => openDeleteModal(item),
+      }
+    );
+  }
+
+  return actions;
 };
 
 const isOverdue = (dateStr: string) => {

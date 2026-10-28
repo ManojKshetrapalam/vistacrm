@@ -33,6 +33,7 @@ class FollowUpReminderTest extends TestCase
 
     protected function tearDown(): void
     {
+        MockWhatsAppService::resetSimulation();
         Carbon::setTestNow(null);
         parent::tearDown();
     }
@@ -458,6 +459,8 @@ class FollowUpReminderTest extends TestCase
             ->where('channel', 'like', '%whatsapp%')
             ->count();
         $this->assertEquals(1, $count);
+
+        MockWhatsAppService::resetSimulation();
     }
 
     /**

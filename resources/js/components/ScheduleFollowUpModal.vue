@@ -76,6 +76,8 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue';
 import api from '../api/axios';
+import { syncEngine, isOnline } from '../services/syncEngine';
+import { localNotificationService } from '../services/localNotifications';
 import { CalendarClock, X, Check } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -103,14 +105,40 @@ const handleSubmit = async () => {
   error.value = '';
 
   try {
-    await api.post(`/leads/${props.lead.id}/follow-ups`, {
-      scheduled_at: form.scheduled_at,
-      notes: form.notes,
-    });
+    if (isOnline.value) {
+      const res = await api.post(`/leads/${props.lead.id}/follow-ups`, {
+        scheduled_at: form.scheduled_at,
+        notes: form.notes,
+      });
+      if (res.data?.follow_up) {
+        await localNotificationService.scheduleReminder(res.data.follow_up);
+      }
+    } else {
+      await syncEngine.enqueueMutation('create_followup', props.lead.id, {
+        scheduled_at: form.scheduled_at,
+        notes: form.notes,
+      });
+      // Schedule local alarm immediately offline
+      await localNotificationService.scheduleReminder({
+        id: Math.floor(Math.random() * 1000000),
+        scheduled_at: form.scheduled_at,
+        lead: props.lead,
+        notes: form.notes,
+      });
+    }
     emit('saved');
     close();
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Failed to schedule follow-up.';
+    try {
+      await syncEngine.enqueueMutation('create_followup', props.lead.id, {
+        scheduled_at: form.scheduled_at,
+        notes: form.notes,
+      });
+      emit('saved');
+      close();
+    } catch {
+      error.value = err.response?.data?.message || 'Failed to schedule follow-up.';
+    }
   } finally {
     submitting.value = false;
   }

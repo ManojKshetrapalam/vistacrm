@@ -248,6 +248,86 @@ class FollowUpController extends Controller
         ]);
     }
 
+    public function cancel(Request $request, FollowUp $followUp): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin() && $followUp->user_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized to cancel this follow-up.'], 403);
+        }
+
+        $followUp->status = 'cancelled';
+        $followUp->reminder_status = 'cancelled';
+        $followUp->save();
+
+        $lead = $followUp->lead;
+        if ($lead) {
+            $nextPending = FollowUp::where('lead_id', $lead->id)
+                ->where('status', 'pending')
+                ->orderBy('scheduled_at', 'asc')
+                ->first();
+            $lead->next_follow_up_date = $nextPending ? $nextPending->scheduled_at : null;
+            $lead->save();
+        }
+
+        LeadActivity::create([
+            'lead_id' => $followUp->lead_id,
+            'user_id' => $user->id,
+            'activity_type' => 'follow_up_cancelled',
+            'title' => 'Follow-up Cancelled',
+            'description' => "Follow-up scheduled for " . ($followUp->scheduled_at_ist ?? 'scheduled date') . " was cancelled by {$user->name}.",
+            'metadata' => [
+                'follow_up_id' => $followUp->id,
+                'cancelled_by' => $user->name,
+            ],
+        ]);
+
+        return response()->json([
+            'message' => 'Follow-up task cancelled successfully.',
+            'follow_up' => $followUp,
+        ]);
+    }
+
+    public function destroy(Request $request, FollowUp $followUp): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized. Only administrators can delete follow-up records.'], 403);
+        }
+
+        $lead = $followUp->lead;
+        $timeStr = $followUp->scheduled_at_ist ?? 'scheduled time';
+        $fuId = $followUp->id;
+        $leadId = $followUp->lead_id;
+
+        $followUp->delete();
+
+        if ($lead) {
+            $nextPending = FollowUp::where('lead_id', $lead->id)
+                ->where('status', 'pending')
+                ->orderBy('scheduled_at', 'asc')
+                ->first();
+            $lead->next_follow_up_date = $nextPending ? $nextPending->scheduled_at : null;
+            $lead->save();
+
+            LeadActivity::create([
+                'lead_id' => $leadId,
+                'user_id' => $user->id,
+                'activity_type' => 'follow_up_deleted',
+                'title' => 'Follow-up Deleted',
+                'description' => "Follow-up #{$fuId} scheduled for {$timeStr} was removed by {$user->name}.",
+                'metadata' => [
+                    'follow_up_id' => $fuId,
+                    'deleted_by' => $user->name,
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Follow-up deleted successfully.',
+            'deleted_id' => $fuId,
+        ]);
+    }
+
     public function outstanding(Request $request): JsonResponse
     {
         $user = $request->user();

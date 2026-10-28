@@ -17,6 +17,7 @@ class LeadActivity extends Model
         'title',
         'description',
         'metadata',
+        'client_uuid',
     ];
 
     protected function casts(): array

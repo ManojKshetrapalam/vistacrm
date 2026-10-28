@@ -22,10 +22,12 @@ class DatabaseSeeder extends Seeder
             ['email' => 'admin@vistaboundintegrated.com'],
             [
                 'name' => 'CRM Administrator',
+                'username' => 'admin',
                 'phone' => '+916361232225',
                 'role' => 'admin',
-                'password' => Hash::make('Vistabound@2026'),
+                'password' => Hash::make('Admin123'),
                 'is_active' => true,
+                'must_change_password' => true,
                 'notification_preferences' => [
                     'whatsapp_enabled' => true,
                     'email_enabled' => true,

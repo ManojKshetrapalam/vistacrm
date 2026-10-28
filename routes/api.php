@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DeviceTokenController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\FollowUpController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\LeadController;
+use App\Http\Controllers\Api\MobileSyncController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\WhatsAppController;
@@ -31,6 +33,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Leads
     Route::get('/leads/export', [LeadController::class, 'export']);
     Route::apiResource('leads', LeadController::class);
+    Route::post('/leads/{id}/restore', [LeadController::class, 'restore']);
+    Route::delete('/leads/{id}/force', [LeadController::class, 'forceDelete']);
     Route::post('/leads/{lead}/assign', [LeadController::class, 'assign']);
     Route::post('/leads/{lead}/call', [LeadController::class, 'logCall']);
     Route::post('/leads/{lead}/note', [LeadController::class, 'addNote']);
@@ -43,6 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leads/{lead}/follow-ups', [FollowUpController::class, 'store']);
     Route::put('/follow-ups/{followUp}', [FollowUpController::class, 'update']);
     Route::post('/follow-ups/{followUp}/complete', [FollowUpController::class, 'complete']);
+    Route::post('/follow-ups/{followUp}/cancel', [FollowUpController::class, 'cancel']);
+    Route::delete('/follow-ups/{followUp}', [FollowUpController::class, 'destroy']);
 
     // Lead Import (Admin only enforced in controller)
     Route::post('/import/upload-preview', [ImportController::class, 'uploadAndPreview']);
@@ -55,9 +61,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/leads/{lead}/whatsapp/preview', [WhatsAppController::class, 'previewMessage']);
     Route::post('/leads/{lead}/whatsapp/log', [WhatsAppController::class, 'logMessageDispatch']);
 
-    // Notifications
+    // Notifications & Real-time Polling
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/poll', [NotificationController::class, 'poll']);
+    Route::get('/notifications/pending', [NotificationController::class, 'pending']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/{notification}/dismiss', [NotificationController::class, 'dismiss']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::get('/notifications/delivery-logs', [NotificationController::class, 'deliveryLogs']);
 
@@ -66,6 +76,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::put('/employees/{user}', [EmployeeController::class, 'update']);
     Route::post('/employees/{user}/toggle-status', [EmployeeController::class, 'toggleStatus']);
+    Route::get('/employees/{user}/leads', [EmployeeController::class, 'assignedLeads']);
+    Route::post('/employees/{user}/reassign-leads', [EmployeeController::class, 'reassignLeads']);
 
     // CRM Settings & Templates (Admin only)
     Route::get('/settings', [SettingsController::class, 'getSettings']);
@@ -74,4 +86,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/settings/templates', [SettingsController::class, 'storeTemplate']);
     Route::put('/settings/templates/{template}', [SettingsController::class, 'updateTemplate']);
     Route::delete('/settings/templates/{template}', [SettingsController::class, 'deleteTemplate']);
+
+    // Mobile Offline Sync & Device Push Tokens
+    Route::prefix('mobile')->group(function () {
+        Route::get('/sync/pull', [MobileSyncController::class, 'pull']);
+        Route::post('/sync/push', [MobileSyncController::class, 'push']);
+        Route::post('/push-token', [DeviceTokenController::class, 'store']);
+        Route::delete('/push-token', [DeviceTokenController::class, 'destroy']);
+    });
 });

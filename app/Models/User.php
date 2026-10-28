@@ -20,9 +20,11 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'phone',
         'password',
+        'must_change_password',
         'role',
         'is_active',
         'notification_preferences',
@@ -49,6 +51,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'must_change_password' => 'boolean',
             'notification_preferences' => 'array',
         ];
     }
@@ -86,5 +89,10 @@ class User extends Authenticatable
     public function notifications(): HasMany
     {
         return $this->hasMany(NotificationLog::class, 'user_id');
+    }
+
+    public function deviceTokens(): HasMany
+    {
+        return $this->hasMany(DeviceToken::class, 'user_id');
     }
 }

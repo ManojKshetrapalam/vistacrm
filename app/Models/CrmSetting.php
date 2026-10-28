@@ -27,6 +27,11 @@ class CrmSetting extends Model
         return $setting ? $setting->value : $default;
     }
 
+    public static function getSetting(string $key, $default = null)
+    {
+        return static::get($key, $default);
+    }
+
     public static function set(string $key, $value)
     {
         return static::updateOrCreate(

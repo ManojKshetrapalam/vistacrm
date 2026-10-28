@@ -279,11 +279,21 @@ class LeadImportService
                             NotificationLog::create([
                                 'lead_id' => $lead->id,
                                 'user_id' => $assignee->id,
+                                'event_type' => 'new_lead',
                                 'channel' => 'in_app',
                                 'recipient' => $assignee->email,
                                 'title' => 'New Lead Assigned from Import',
                                 'message' => "You have been assigned lead {$lead->name} ({$lead->reference_id}) from recent import.",
                                 'status' => 'delivered',
+                                'metadata' => [
+                                    'lead_id' => $lead->id,
+                                    'lead_reference_id' => $lead->reference_id,
+                                    'lead_name' => $lead->name,
+                                    'company_name' => $lead->company_name,
+                                    'phone' => $lead->phone,
+                                    'service_interest' => $lead->service_interest,
+                                    'popup_alert' => true,
+                                ],
                                 'is_read' => false,
                             ]);
                         }

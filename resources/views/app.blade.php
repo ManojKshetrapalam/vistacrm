@@ -8,9 +8,9 @@
     <title>Vistabound CRM — Vistabound Integrated Solutions LLP</title>
     
     <!-- Official Favicon -->
-    <link rel="icon" type="image/jpeg" href="/favicon.jpg">
-    <link rel="apple-touch-icon" href="/favicon.jpg">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/jpeg" href="{{ asset('favicon.jpg') }}">
+    <link rel="apple-touch-icon" href="{{ asset('favicon.jpg') }}">
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
 
     <!-- Fonts: Sora & Source Sans 3 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,9 +23,20 @@
     <div id="app"></div>
 
     <script>
+        // Invalidate stale caches from previous service worker versions
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => {
+                    if (name !== 'vistabound-crm-v2') {
+                        caches.delete(name);
+                    }
+                });
+            });
+        }
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(err => {
+                navigator.serviceWorker.register('{{ asset('sw.js') }}?v=2').catch(err => {
                     console.log('SW registration skipped:', err);
                 });
             });

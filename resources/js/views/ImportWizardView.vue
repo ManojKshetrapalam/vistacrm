@@ -12,6 +12,7 @@
         </div>
 
         <button
+          v-if="activeMainTab === 'wizard'"
           @click="downloadSampleCsv"
           class="px-4 py-2 bg-white border border-vb-plum/20 hover:border-vb-plum text-vb-plum rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm self-start"
         >
@@ -20,6 +21,29 @@
         </button>
       </div>
 
+      <!-- Navigation Tabs: New Import vs Import Batches & History -->
+      <div class="flex items-center gap-2 border-b border-vb-plum/10 pb-3">
+        <button
+          @click="activeMainTab = 'wizard'"
+          class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+          :class="activeMainTab === 'wizard' ? 'bg-vb-plum text-white shadow-sm' : 'bg-white/80 text-vb-plum hover:bg-white border border-vb-plum/10'"
+        >
+          <UploadCloud class="w-4 h-4" />
+          <span>New Lead Ingestion</span>
+        </button>
+
+        <button
+          @click="activeMainTab = 'history'; fetchHistory()"
+          class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+          :class="activeMainTab === 'history' ? 'bg-vb-plum text-white shadow-sm' : 'bg-white/80 text-vb-plum hover:bg-white border border-vb-plum/10'"
+        >
+          <History class="w-4 h-4" />
+          <span>Import Batches &amp; History</span>
+        </button>
+      </div>
+
+      <!-- WIZARD TAB -->
+      <template v-if="activeMainTab === 'wizard'">
       <!-- Step Indicator Bar -->
       <div class="card-glass p-4">
         <div class="grid grid-cols-4 gap-2 text-center text-xs">
@@ -381,6 +405,226 @@
           </router-link>
         </div>
       </div>
+      </template>
+
+      <!-- IMPORT BATCHES & HISTORY TAB -->
+      <div v-else class="space-y-6">
+        <div class="card-glass p-6">
+          <div class="flex items-center justify-between pb-4 border-b border-vb-plum/10">
+            <div>
+              <h3 class="font-display font-bold text-lg text-vb-plum">Historical Import Batches</h3>
+              <p class="text-xs text-vb-muted mt-0.5">Audit log of all past lead ingestion batches, duplicate detection counts, and error reports.</p>
+            </div>
+            <button
+              @click="fetchHistory(historyPagination.current_page)"
+              :disabled="loadingHistory"
+              class="p-2 rounded-xl border border-vb-plum/10 hover:bg-white text-vb-plum transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': loadingHistory }" />
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          <!-- Loading State -->
+          <div v-if="loadingHistory" class="py-12 text-center text-vb-muted text-xs">
+            <RefreshCw class="w-6 h-6 animate-spin mx-auto text-vb-violet mb-2" />
+            Loading import history...
+          </div>
+
+          <!-- Empty State -->
+          <div v-else-if="importHistories.length === 0" class="py-12 text-center text-vb-muted space-y-2">
+            <FileSpreadsheet class="w-10 h-10 mx-auto text-vb-plum/30" />
+            <p class="font-medium text-vb-plum">No import batches recorded yet.</p>
+            <p class="text-xs">Uploaded spreadsheets will be logged here with complete row-by-row audit trails.</p>
+          </div>
+
+          <!-- History Table -->
+          <div v-else class="overflow-x-auto mt-4">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-vb-plum/5 text-vb-plum uppercase font-display font-bold text-[10px] tracking-wider">
+                <tr>
+                  <th class="py-3 px-3">Batch &amp; Date</th>
+                  <th class="py-3 px-3">Uploaded By</th>
+                  <th class="py-3 px-3">Assignment Target</th>
+                  <th class="py-3 px-3 text-center">Total Rows</th>
+                  <th class="py-3 px-3 text-center">Ingested</th>
+                  <th class="py-3 px-3 text-center">Duplicates</th>
+                  <th class="py-3 px-3 text-center">Failed</th>
+                  <th class="py-3 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-vb-plum/5">
+                <tr v-for="item in importHistories" :key="item.id" class="hover:bg-white/60 transition-colors">
+                  <td class="py-3 px-3">
+                    <div class="font-semibold text-vb-plum flex items-center gap-1.5">
+                      <FileSpreadsheet class="w-3.5 h-3.5 text-vb-violet flex-shrink-0" />
+                      <span class="truncate max-w-[180px]" :title="item.filename">{{ item.filename }}</span>
+                    </div>
+                    <div class="text-[10px] text-vb-muted mt-0.5">
+                      {{ formatDateTime(item.created_at) }}
+                    </div>
+                  </td>
+                  <td class="py-3 px-3 text-vb-plum font-medium">
+                    {{ item.user?.name || 'Administrator' }}
+                  </td>
+                  <td class="py-3 px-3">
+                    <span v-if="item.assigned_employee" class="px-2 py-0.5 rounded-full bg-vb-plum/10 text-vb-plum text-[11px] font-medium">
+                      {{ item.assigned_employee.name }}
+                    </span>
+                    <span v-else class="text-vb-muted text-[11px] italic">
+                      Unassigned / Pool
+                    </span>
+                  </td>
+                  <td class="py-3 px-3 text-center font-mono font-bold text-vb-plum">
+                    {{ item.total_rows }}
+                  </td>
+                  <td class="py-3 px-3 text-center font-mono">
+                    <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                      {{ item.imported_count }}
+                    </span>
+                  </td>
+                  <td class="py-3 px-3 text-center font-mono">
+                    <span v-if="item.duplicate_count > 0" class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
+                      {{ item.duplicate_count }}
+                    </span>
+                    <span v-else class="text-vb-muted">0</span>
+                  </td>
+                  <td class="py-3 px-3 text-center font-mono">
+                    <span v-if="(item.invalid_count + item.skipped_count) > 0" class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                      {{ item.invalid_count + item.skipped_count }}
+                    </span>
+                    <span v-else class="text-vb-muted">0</span>
+                  </td>
+                  <td class="py-3 px-3 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <button
+                        v-if="hasFailedRows(item)"
+                        @click="downloadFailedReport(item)"
+                        class="p-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 transition-colors"
+                        title="Download Failed Rows CSV Report"
+                      >
+                        <Download class="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        @click="selectedHistory = item"
+                        class="p-1.5 rounded-lg border border-vb-plum/15 text-vb-plum hover:bg-vb-cream/50 transition-colors"
+                        title="View Batch Audit Details"
+                      >
+                        <Eye class="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div v-if="historyPagination.last_page > 1" class="flex items-center justify-between pt-4 border-t border-vb-plum/10 mt-4 text-xs">
+              <span class="text-vb-muted">
+                Showing page {{ historyPagination.current_page }} of {{ historyPagination.last_page }} ({{ historyPagination.total }} total batches)
+              </span>
+              <div class="flex items-center gap-2">
+                <button
+                  :disabled="historyPagination.current_page <= 1"
+                  @click="fetchHistory(historyPagination.current_page - 1)"
+                  class="px-3 py-1.5 rounded-lg border border-vb-plum/20 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  :disabled="historyPagination.current_page >= historyPagination.last_page"
+                  @click="fetchHistory(historyPagination.current_page + 1)"
+                  class="px-3 py-1.5 rounded-lg border border-vb-plum/20 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch Audit Detail Modal -->
+        <div v-if="selectedHistory" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-vb-plum/60 backdrop-blur-sm">
+          <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-vb-plum/10 pb-3">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-vb-violet">Batch Audit Inspection</span>
+                <h3 class="font-display font-bold text-lg text-vb-plum mt-0.5 truncate max-w-md">
+                  {{ selectedHistory.filename }}
+                </h3>
+              </div>
+              <button @click="selectedHistory = null" class="p-1.5 rounded-full hover:bg-vb-cream text-vb-muted hover:text-vb-plum transition-colors">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+
+            <div class="grid grid-cols-4 gap-3 text-center text-xs">
+              <div class="p-3 bg-vb-cream/50 rounded-2xl">
+                <span class="text-vb-muted text-[10px] uppercase font-bold block">Total Rows</span>
+                <span class="text-lg font-bold font-mono text-vb-plum">{{ selectedHistory.total_rows }}</span>
+              </div>
+              <div class="p-3 bg-emerald-50 rounded-2xl text-emerald-800">
+                <span class="text-[10px] uppercase font-bold block">Ingested</span>
+                <span class="text-lg font-bold font-mono">{{ selectedHistory.imported_count }}</span>
+              </div>
+              <div class="p-3 bg-amber-50 rounded-2xl text-amber-800">
+                <span class="text-[10px] uppercase font-bold block">Duplicates</span>
+                <span class="text-lg font-bold font-mono">{{ selectedHistory.duplicate_count }}</span>
+              </div>
+              <div class="p-3 bg-rose-50 rounded-2xl text-rose-800">
+                <span class="text-[10px] uppercase font-bold block">Failed</span>
+                <span class="text-lg font-bold font-mono">{{ (selectedHistory.invalid_count || 0) + (selectedHistory.skipped_count || 0) }}</span>
+              </div>
+            </div>
+
+            <!-- Failed Rows List inside Modal -->
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-vb-plum font-display">Row-Level Failures / Skip Log</h4>
+                <button
+                  v-if="hasFailedRows(selectedHistory)"
+                  @click="downloadFailedReport(selectedHistory)"
+                  class="text-xs font-semibold text-vb-violet hover:underline flex items-center gap-1"
+                >
+                  <Download class="w-3.5 h-3.5" />
+                  <span>Download Report (.csv)</span>
+                </button>
+              </div>
+
+              <div v-if="selectedHistory.summary?.failed_rows?.length" class="border border-vb-plum/10 rounded-2xl overflow-hidden">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-vb-plum/5 text-vb-plum font-bold">
+                    <tr>
+                      <th class="py-2 px-3">Row</th>
+                      <th class="py-2 px-3">Name</th>
+                      <th class="py-2 px-3">Phone</th>
+                      <th class="py-2 px-3">Failure Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-vb-plum/5">
+                    <tr v-for="(f, idx) in selectedHistory.summary.failed_rows" :key="idx" class="hover:bg-rose-50/20">
+                      <td class="py-2 px-3 font-mono font-bold text-vb-plum">Row {{ f.row }}</td>
+                      <td class="py-2 px-3">{{ f.name || '—' }}</td>
+                      <td class="py-2 px-3 font-mono">{{ f.phone || '—' }}</td>
+                      <td class="py-2 px-3 text-rose-700 font-medium">{{ f.reason }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="p-4 bg-emerald-50 text-emerald-800 text-xs rounded-2xl flex items-center gap-2">
+                <CheckCircle2 class="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>All rows in this spreadsheet were ingested cleanly with zero validation errors!</span>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-vb-plum/10 flex justify-end">
+              <button @click="selectedHistory = null" class="btn-primary px-5 py-2 rounded-full text-xs font-semibold shadow-md">
+                Close Audit View
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
@@ -395,7 +639,17 @@ import {
   Download,
   ArrowRight,
   CheckCircle2,
+  History,
+  RefreshCw,
+  Eye,
+  X,
 } from 'lucide-vue-next';
+
+const activeMainTab = ref<'wizard' | 'history'>('wizard');
+const importHistories = ref<any[]>([]);
+const loadingHistory = ref(false);
+const historyPagination = ref<any>({ current_page: 1, last_page: 1, total: 0 });
+const selectedHistory = ref<any>(null);
 
 const step = ref(1);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -541,6 +795,56 @@ const downloadReportCsv = (failedRows: any[]) => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+};
+
+const fetchHistory = async (page = 1) => {
+  loadingHistory.value = true;
+  try {
+    const res = await api.get(`/import/history?page=${page}`);
+    importHistories.value = res.data.data || [];
+    historyPagination.value = {
+      current_page: res.data.current_page,
+      last_page: res.data.last_page,
+      total: res.data.total,
+    };
+  } catch (err: any) {
+    console.error('Failed to load import history:', err);
+  } finally {
+    loadingHistory.value = false;
+  }
+};
+
+const hasFailedRows = (item: any) => {
+  return (item.summary?.failed_rows && item.summary.failed_rows.length > 0) || (item.invalid_count > 0);
+};
+
+const downloadFailedReport = async (item: any) => {
+  try {
+    const res = await api.get(`/import/history/${item.id}/failed-report`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `failed_report_${item.id}_${item.filename || 'import'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (err: any) {
+    alert('Failed to download failure report: ' + (err.response?.data?.message || err.message));
+  }
+};
+
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
 onMounted(() => {

@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Lead extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'reference_id',
@@ -29,6 +30,8 @@ class Lead extends Model
         'last_contact_date',
         'next_follow_up_date',
         'custom_fields',
+        'client_uuid',
+        'version',
     ];
 
     protected function casts(): array
@@ -82,7 +85,8 @@ class Lead extends Model
         $year = date('Y');
         $prefix = "VB-LD-{$year}-";
 
-        $lastLead = static::where('reference_id', 'like', "{$prefix}%")
+        $lastLead = static::withTrashed()
+            ->where('reference_id', 'like', "{$prefix}%")
             ->orderBy('id', 'desc')
             ->first();
 

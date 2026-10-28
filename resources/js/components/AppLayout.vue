@@ -19,11 +19,14 @@
         <!-- Logo Area -->
         <div class="p-5 border-b border-vb-plum/10 flex items-center justify-between">
           <router-link to="/dashboard" class="flex items-center gap-3">
-            <img
-              src="/favicon.jpg"
-              alt="Vistabound Logo"
-              class="h-10 w-10 rounded-xl object-contain shadow-sm border border-vb-plum/10"
-            />
+            <div class="w-10 h-10 rounded-xl bg-vb-cream p-1 shadow-sm border border-vb-plum/10 flex items-center justify-center shrink-0">
+              <img
+                :src="logoUrl"
+                alt="Vistabound Logo"
+                class="w-full h-full object-contain"
+                @error="onLogoError"
+              />
+            </div>
             <div class="leading-tight">
               <span class="block font-display font-bold text-base tracking-tight text-vb-plum">VISTABOUND</span>
               <span class="block text-[10px] tracking-[0.18em] uppercase text-vb-muted font-medium">Solutions LLP</span>
@@ -132,10 +135,10 @@
               <span>Notifications & Logs</span>
             </div>
             <span
-              v-if="authStore.unreadCount > 0"
+              v-if="unreadNotificationsCount > 0"
               class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-vb-violet text-white"
             >
-              {{ authStore.unreadCount }}
+              {{ unreadNotificationsCount }}
             </span>
           </router-link>
 
@@ -192,6 +195,27 @@
 
           <!-- Topbar Actions -->
           <div class="flex items-center gap-3">
+            <!-- Offline / Online Sync State Indicator -->
+            <button
+              v-if="isOnline"
+              @click="handleManualSync"
+              :disabled="isSyncing"
+              title="Click to trigger full synchronization with cloud"
+              class="hidden sm:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              <span class="w-2 h-2 rounded-full bg-emerald-500" :class="{'animate-pulse': !isSyncing}"></span>
+              <span>{{ isSyncing ? 'Syncing...' : (pendingCount > 0 ? `Syncing (${pendingCount})` : 'Online') }}</span>
+              <RefreshCw class="w-3 h-3 text-emerald-600" :class="{'animate-spin': isSyncing}" />
+            </button>
+            <div
+              v-else
+              title="Offline Mode - Changes are queued and will synchronize automatically when online"
+              class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-amber-500/30 bg-amber-50 text-amber-800"
+            >
+              <CloudOff class="w-3.5 h-3.5 text-amber-600" />
+              <span>Offline{{ pendingCount > 0 ? ` (${pendingCount} queued)` : '' }}</span>
+            </div>
+
             <router-link
               to="/leads/new"
               class="btn-primary text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5"
@@ -208,7 +232,7 @@
             >
               <Bell class="w-5 h-5" />
               <span
-                v-if="authStore.unreadCount > 0"
+                v-if="unreadNotificationsCount > 0"
                 class="absolute top-1 right-1 w-2.5 h-2.5 bg-vb-violet rounded-full ring-2 ring-white"
               ></span>
             </router-link>
@@ -231,12 +255,33 @@
 </template>
 
 <script setup lang="ts">
+import vistaboundLogo from '@/assets/vistabound-logo.png';
 import { ref, computed, onMounted } from 'vue';
+
+const logoUrl = computed(() => {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
+    return '/CRM/images/vistabound-logo.png';
+  }
+  return vistaboundLogo;
+});
+
+const onLogoError = (e: Event) => {
+  const el = e.target as HTMLImageElement;
+  if (!el.dataset.fallback) {
+    el.dataset.fallback = '1';
+    el.src = vistaboundLogo;
+  } else if (el.dataset.fallback === '1') {
+    el.dataset.fallback = '2';
+    el.src = '/images/vistabound-logo.png';
+  }
+};
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useNotificationStore } from '../stores/notification';
 import api from '../api/axios';
 import LoginFollowUpModal from './LoginFollowUpModal.vue';
 import ActiveReminderModal from './ActiveReminderModal.vue';
+import { isOnline, isSyncing, pendingCount, syncEngine } from '../services/syncEngine';
 import {
   LayoutDashboard,
   Users,
@@ -250,14 +295,28 @@ import {
   X,
   Plus,
   Bell,
+  RefreshCw,
+  CloudOff,
 } from 'lucide-vue-next';
+
+const handleManualSync = async () => {
+  await syncEngine.sync();
+};
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const notificationStore = useNotificationStore();
 
 const mobileSidebarOpen = ref(false);
-const dueFollowupsCount = ref(0);
+
+const dueFollowupsCount = computed(() => {
+  return (notificationStore.followUpCounts?.today || 0) + (notificationStore.followUpCounts?.overdue || 0);
+});
+
+const unreadNotificationsCount = computed(() => {
+  return notificationStore.unreadCount || authStore.unreadCount || 0;
+});
 
 const isActive = (path: string) => {
   return route.path === path || (path !== '/dashboard' && route.path.startsWith(path));
@@ -283,22 +342,16 @@ const userInitials = computed(() => {
     : parts[0].slice(0, 2).toUpperCase();
 });
 
-const fetchQuickStats = async () => {
-  try {
-    const res = await api.get('/follow-ups?tab=today&per_page=1');
-    dueFollowupsCount.value = (res.data.counts?.today || 0) + (res.data.counts?.overdue || 0);
-  } catch (err) {
-    // quiet
-  }
-};
-
 const handleLogout = async () => {
+  notificationStore.stopPolling();
   await authStore.logout();
   router.push('/login');
 };
 
 onMounted(() => {
-  fetchQuickStats();
-  authStore.fetchMe();
+  if (authStore.isAuthenticated) {
+    notificationStore.startPolling();
+    authStore.fetchMe();
+  }
 });
 </script>

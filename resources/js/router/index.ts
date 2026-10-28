@@ -83,8 +83,16 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
+// Determine base URL dynamically (supports root domain, subdomain, or /CRM subfolder)
+const getRouterBase = (): string => {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
+    return '/CRM/';
+  }
+  return '/';
+};
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(getRouterBase()),
   routes,
 });
 

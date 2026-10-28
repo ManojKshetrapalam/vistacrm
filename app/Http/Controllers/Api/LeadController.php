@@ -11,6 +11,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadController extends Controller
@@ -19,8 +20,12 @@ class LeadController extends Controller
     {
         $user = $request->user();
 
-        $query = Lead::accessibleBy($user)
-            ->with(['assignedEmployee:id,name,email,phone', 'creator:id,name']);
+        $isArchived = $request->boolean('archived') || $request->input('status') === 'archived';
+        $query = ($isArchived && $user->isAdmin())
+            ? Lead::onlyTrashed()->accessibleBy($user)
+            : Lead::accessibleBy($user);
+
+        $query->with(['assignedEmployee:id,name,email,phone', 'creator:id,name']);
 
         // Search term
         if ($request->filled('search')) {
@@ -28,7 +33,7 @@ class LeadController extends Controller
         }
 
         // Filters
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->input('status') !== 'archived') {
             $statuses = is_array($request->input('status')) ? $request->input('status') : explode(',', $request->input('status'));
             $query->whereIn('status', $statuses);
         }
@@ -91,9 +96,12 @@ class LeadController extends Controller
         return response()->json($leads);
     }
 
-    public function show(Request $request, Lead $lead): JsonResponse
+    public function show(Request $request, $id): JsonResponse
     {
         $user = $request->user();
+        $query = $user->isAdmin() ? Lead::withTrashed() : Lead::query();
+        $lead = $query->findOrFail($id);
+
         if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
             return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
         }
@@ -108,7 +116,10 @@ class LeadController extends Controller
             },
         ]);
 
-        return response()->json($lead);
+        $data = $lead->toArray();
+        $data['is_archived'] = $lead->trashed();
+
+        return response()->json($data);
     }
 
     public function store(Request $request): JsonResponse
@@ -209,14 +220,49 @@ class LeadController extends Controller
                     NotificationLog::create([
                         'lead_id' => $lead->id,
                         'user_id' => $assignedUser->id,
+                        'event_type' => 'new_lead',
                         'channel' => 'in_app',
                         'recipient' => $assignedUser->email,
                         'title' => 'New Lead Assigned',
                         'message' => "You have been assigned lead {$lead->name} ({$lead->reference_id}) for {$lead->service_interest}.",
                         'status' => 'delivered',
+                        'metadata' => [
+                            'lead_id' => $lead->id,
+                            'lead_reference_id' => $lead->reference_id,
+                            'lead_name' => $lead->name,
+                            'company_name' => $lead->company_name,
+                            'phone' => $lead->phone,
+                            'service_interest' => $lead->service_interest,
+                            'popup_alert' => true,
+                        ],
                         'is_read' => false,
                     ]);
                 }
+            }
+        } else {
+            // Unassigned lead created: Notify all active administrators
+            $admins = User::where('role', 'admin')->where('is_active', true)->get();
+            foreach ($admins as $admin) {
+                NotificationLog::create([
+                    'lead_id' => $lead->id,
+                    'user_id' => $admin->id,
+                    'event_type' => 'unassigned_lead',
+                    'channel' => 'in_app',
+                    'recipient' => $admin->email,
+                    'title' => 'New Unassigned Lead Received',
+                    'message' => "New unassigned lead {$lead->name} ({$lead->reference_id}) requires staff assignment.",
+                    'status' => 'delivered',
+                    'metadata' => [
+                        'lead_id' => $lead->id,
+                        'lead_reference_id' => $lead->reference_id,
+                        'lead_name' => $lead->name,
+                        'company_name' => $lead->company_name,
+                        'phone' => $lead->phone,
+                        'service_interest' => $lead->service_interest,
+                        'popup_alert' => true,
+                    ],
+                    'is_read' => false,
+                ]);
             }
         }
 
@@ -351,11 +397,21 @@ class LeadController extends Controller
                 NotificationLog::create([
                     'lead_id' => $lead->id,
                     'user_id' => $newAssignee->id,
+                    'event_type' => 'lead_reassigned',
                     'channel' => 'in_app',
                     'recipient' => $newAssignee->email,
                     'title' => 'Lead Reassigned to You',
                     'message' => "Lead {$lead->name} ({$lead->reference_id}) has been assigned to you.",
                     'status' => 'delivered',
+                    'metadata' => [
+                        'lead_id' => $lead->id,
+                        'lead_reference_id' => $lead->reference_id,
+                        'lead_name' => $lead->name,
+                        'company_name' => $lead->company_name,
+                        'phone' => $lead->phone,
+                        'service_interest' => $lead->service_interest,
+                        'popup_alert' => true,
+                    ],
                     'is_read' => false,
                 ]);
             }
@@ -405,11 +461,21 @@ class LeadController extends Controller
             NotificationLog::create([
                 'lead_id' => $lead->id,
                 'user_id' => $newAssignee->id,
+                'event_type' => 'lead_reassigned',
                 'channel' => 'in_app',
                 'recipient' => $newAssignee->email,
                 'title' => 'Lead Assigned',
                 'message' => "Lead {$lead->name} ({$lead->reference_id}) has been assigned to you.",
                 'status' => 'delivered',
+                'metadata' => [
+                    'lead_id' => $lead->id,
+                    'lead_reference_id' => $lead->reference_id,
+                    'lead_name' => $lead->name,
+                    'company_name' => $lead->company_name,
+                    'phone' => $lead->phone,
+                    'service_interest' => $lead->service_interest,
+                    'popup_alert' => true,
+                ],
                 'is_read' => false,
             ]);
         }
@@ -588,5 +654,92 @@ class LeadController extends Controller
 
             fclose($handle);
         }, 200, $headers);
+    }
+
+    public function destroy(Request $request, Lead $lead): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized. Only administrators can archive leads.'], 403);
+        }
+
+        // Cancel any pending follow-up reminders
+        FollowUp::where('lead_id', $lead->id)
+            ->where('status', 'pending')
+            ->update(['reminder_status' => 'cancelled']);
+
+        LeadActivity::create([
+            'lead_id' => $lead->id,
+            'user_id' => $user->id,
+            'activity_type' => 'lead_archived',
+            'title' => 'Lead Archived',
+            'description' => "Lead {$lead->reference_id} ({$lead->name}) was archived by {$user->name}.",
+            'metadata' => [
+                'archived_at' => Carbon::now()->toIso8601String(),
+                'archived_by' => $user->name,
+            ],
+        ]);
+
+        $lead->delete(); // Soft delete
+
+        return response()->json([
+            'message' => "Lead {$lead->reference_id} ({$lead->name}) has been archived.",
+            'lead_id' => $lead->id,
+        ]);
+    }
+
+    public function restore(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized. Only administrators can restore leads.'], 403);
+        }
+
+        $lead = Lead::onlyTrashed()->findOrFail($id);
+        $lead->restore();
+
+        LeadActivity::create([
+            'lead_id' => $lead->id,
+            'user_id' => $user->id,
+            'activity_type' => 'lead_restored',
+            'title' => 'Lead Restored',
+            'description' => "Lead {$lead->reference_id} ({$lead->name}) was restored from archive by {$user->name}.",
+            'metadata' => [
+                'restored_at' => Carbon::now()->toIso8601String(),
+                'restored_by' => $user->name,
+            ],
+        ]);
+
+        $lead->load(['assignedEmployee:id,name,email,phone', 'creator:id,name']);
+
+        return response()->json([
+            'message' => "Lead {$lead->reference_id} ({$lead->name}) restored successfully.",
+            'lead' => $lead,
+        ]);
+    }
+
+    public function forceDelete(Request $request, $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized. Only administrators can permanently delete leads.'], 403);
+        }
+
+        $lead = Lead::onlyTrashed()->findOrFail($id);
+
+        $refId = $lead->reference_id;
+        $name = $lead->name;
+
+        DB::transaction(function () use ($lead) {
+            $lead->notificationLogs()->delete();
+            $lead->followUps()->delete();
+            $lead->activities()->delete();
+            $lead->forceDelete();
+        });
+
+        return response()->json([
+            'message' => "Lead {$refId} ({$name}) has been permanently deleted.",
+            'deleted_id' => $id,
+        ]);
     }
 }

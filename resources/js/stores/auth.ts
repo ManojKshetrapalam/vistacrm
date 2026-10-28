@@ -32,16 +32,29 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    async login(credentials: { email: string; password: string }) {
+    async login(credentials: { email?: string; login?: string; password: string }) {
       this.loading = true;
       this.error = null;
       try {
-        const response = await api.post('/auth/login', credentials);
+        const payload = {
+          login: credentials.login || credentials.email,
+          email: credentials.email || credentials.login,
+          password: credentials.password,
+        };
+        const response = await api.post('/auth/login', payload);
         this.token = response.data.token;
         this.user = response.data.user;
 
         localStorage.setItem('vb_crm_token', this.token);
         localStorage.setItem('vb_crm_user', JSON.stringify(this.user));
+
+        // Reset session flags on fresh login so briefing and active alerts appear
+        try {
+          sessionStorage.removeItem('vb_crm_login_popup_seen');
+          sessionStorage.removeItem('vb_crm_dismissed_alerts');
+        } catch (e) {
+          // ignore
+        }
 
         await this.fetchMe();
         return response.data;
@@ -82,6 +95,12 @@ export const useAuthStore = defineStore('auth', {
         this.user = null;
         localStorage.removeItem('vb_crm_token');
         localStorage.removeItem('vb_crm_user');
+        try {
+          sessionStorage.removeItem('vb_crm_login_popup_seen');
+          sessionStorage.removeItem('vb_crm_dismissed_alerts');
+        } catch (e) {
+          // ignore
+        }
       }
     },
   },

@@ -14,11 +14,14 @@
           <div class="absolute inset-0 bg-white/[0.03] backdrop-blur-[1px]"></div>
           <div class="relative z-10 space-y-6">
             <div class="flex items-center gap-3.5">
-              <img
-                src="/favicon.jpg"
-                alt="Vistabound Logo"
-                class="h-12 w-12 rounded-xl object-contain bg-white p-1 shadow-md"
-              />
+              <div class="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md p-1.5 shadow-md flex items-center justify-center shrink-0 border border-white/20">
+                <img
+                  :src="logoUrl"
+                  alt="Vistabound Logo"
+                  class="w-full h-full object-contain"
+                  @error="onLogoError"
+                />
+              </div>
               <div>
                 <span class="block font-display font-bold text-xl tracking-tight text-white">VISTABOUND</span>
                 <span class="block text-[11px] tracking-[0.2em] uppercase text-white/70">Integrated Solutions LLP</span>
@@ -50,49 +53,37 @@
         <!-- Login Form Column -->
         <div class="p-8 lg:p-12 bg-white flex flex-col justify-center">
           <div>
+            <!-- Mobile Brand Header (visible on mobile screens when left column is stacked) -->
+            <div class="md:hidden flex items-center gap-3.5 mb-6 pb-4 border-b border-vb-plum/10">
+              <div class="w-12 h-12 rounded-xl bg-vb-plum p-1.5 shadow-md flex items-center justify-center shrink-0">
+                <img
+                  :src="logoUrl"
+                  alt="Vistabound Logo"
+                  class="w-full h-full object-contain"
+                  @error="onLogoError"
+                />
+              </div>
+              <div>
+                <span class="block font-display font-bold text-lg tracking-tight text-vb-plum leading-tight">VISTABOUND</span>
+                <span class="block text-[10px] tracking-[0.18em] uppercase text-vb-muted font-semibold">Integrated Solutions LLP</span>
+              </div>
+            </div>
+
             <h3 class="font-display font-bold text-2xl text-vb-plum">Sign in to your desk</h3>
             <p class="text-sm text-vb-muted mt-1">Enter your CRM credentials to access your pipeline.</p>
-          </div>
-
-          <!-- Quick Autofill Demo Credentials -->
-          <div class="mt-5 p-3.5 bg-vb-cream/70 rounded-xl border border-vb-plum/10 text-xs">
-            <span class="font-semibold text-vb-plum block mb-1.5 font-display">Quick Demo Logins:</span>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                @click="autofill('admin@vistaboundintegrated.com')"
-                class="px-2.5 py-1 rounded-lg bg-vb-plum text-white text-[11px] font-semibold hover:bg-vb-plum-2 transition-colors"
-              >
-                Admin (All Leads)
-              </button>
-              <button
-                type="button"
-                @click="autofill('ananya@vistaboundintegrated.com')"
-                class="px-2.5 py-1 rounded-lg bg-white border border-vb-plum/20 text-vb-plum text-[11px] font-semibold hover:bg-vb-cream transition-colors"
-              >
-                Employee (Ananya)
-              </button>
-              <button
-                type="button"
-                @click="autofill('rohit@vistaboundintegrated.com')"
-                class="px-2.5 py-1 rounded-lg bg-white border border-vb-plum/20 text-vb-plum text-[11px] font-semibold hover:bg-vb-cream transition-colors"
-              >
-                Employee (Rohit)
-              </button>
-            </div>
           </div>
 
           <form @submit.prevent="handleLogin" class="mt-6 space-y-4">
             <div>
               <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-                Email Address
+                Username or Email Address
               </label>
               <input
                 v-model="email"
-                type="email"
+                type="text"
                 required
-                autocomplete="email"
-                placeholder="name@vistaboundintegrated.com"
+                autocomplete="username"
+                placeholder="admin or name@vistaboundintegrated.com"
                 class="field text-sm"
               />
             </div>
@@ -125,6 +116,15 @@
               <span v-if="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
               <span>{{ loading ? 'Authenticating...' : 'Sign In to CRM' }}</span>
             </button>
+
+            <!-- Production Connection Status Footer -->
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-vb-muted">
+              <span class="flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Production Endpoint</span>
+              </span>
+              <span class="font-mono text-[10px] text-vb-plum/70 font-medium">vistaboundintegrated.com</span>
+            </div>
           </form>
         </div>
       </div>
@@ -133,23 +133,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import vistaboundLogo from '@/assets/vistabound-logo.png';
+import { ref, computed } from 'vue';
+
+const logoUrl = computed(() => {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
+    return '/CRM/images/vistabound-logo.png';
+  }
+  return vistaboundLogo;
+});
+
+const onLogoError = (e: Event) => {
+  const el = e.target as HTMLImageElement;
+  if (!el.dataset.fallback) {
+    el.dataset.fallback = '1';
+    el.src = vistaboundLogo;
+  } else if (el.dataset.fallback === '1') {
+    el.dataset.fallback = '2';
+    el.src = '/images/vistabound-logo.png';
+  }
+};
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
-const email = ref('admin@vistaboundintegrated.com');
-const password = ref('Vistabound@2026');
+const email = ref('');
+const password = ref('');
 const loading = ref(false);
 const errorMsg = ref('');
-
-const autofill = (userEmail: string) => {
-  email.value = userEmail;
-  password.value = 'Vistabound@2026';
-  errorMsg.value = '';
-};
 
 const handleLogin = async () => {
   loading.value = true;
@@ -157,12 +170,13 @@ const handleLogin = async () => {
 
   try {
     await authStore.login({
-      email: email.value,
+      login: email.value.trim(),
+      email: email.value.trim(),
       password: password.value,
     });
     router.push('/dashboard');
   } catch (err: any) {
-    errorMsg.value = err.response?.data?.message || 'Login failed. Please check your credentials.';
+    errorMsg.value = err.response?.data?.message || 'The provided credentials do not match our records.';
   } finally {
     loading.value = false;
   }

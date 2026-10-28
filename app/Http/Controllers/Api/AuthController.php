@@ -15,11 +15,22 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => 'required|email',
+            'email' => 'nullable|string',
+            'username' => 'nullable|string',
+            'login' => 'nullable|string',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
+        $identifier = trim($validated['login'] ?? $validated['username'] ?? $validated['email'] ?? '');
+        if (empty($identifier)) {
+            throw ValidationException::withMessages([
+                'email' => ['Please provide your email address or username.'],
+            ]);
+        }
+
+        $user = User::where('email', $identifier)
+            ->orWhere('username', $identifier)
+            ->first();
 
         if (!$user || !Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
@@ -42,10 +53,12 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'username' => $user->username,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'role' => $user->role,
                 'is_active' => $user->is_active,
+                'must_change_password' => (bool)$user->must_change_password,
                 'notification_preferences' => $user->notification_preferences,
             ],
         ]);
@@ -92,6 +105,7 @@ class AuthController extends Controller
         }
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
+            $user->must_change_password = false;
         }
         if (!empty($validated['notification_preferences'])) {
             $user->notification_preferences = array_merge(

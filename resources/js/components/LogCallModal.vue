@@ -134,6 +134,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue';
 import api from '../api/axios';
+import { syncEngine, isOnline } from '../services/syncEngine';
 import { PhoneCall, Phone, X, Check } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -164,17 +165,46 @@ const handleSubmit = async () => {
   error.value = '';
 
   try {
-    await api.post(`/leads/${props.lead.id}/call`, {
-      outcome: form.outcome,
-      duration_minutes: form.duration_minutes,
-      update_status: form.update_status || null,
-      next_follow_up_date: form.next_follow_up_date || null,
-      notes: form.notes,
-    });
+    if (isOnline.value) {
+      await api.post(`/leads/${props.lead.id}/call`, {
+        outcome: form.outcome,
+        duration_minutes: form.duration_minutes,
+        update_status: form.update_status || null,
+        next_follow_up_date: form.next_follow_up_date || null,
+        notes: form.notes,
+      });
+    } else {
+      await syncEngine.enqueueMutation('log_call', props.lead.id, {
+        outcome: form.outcome,
+        duration: form.duration_minutes,
+        notes: form.notes,
+      });
+      if (form.update_status) {
+        await syncEngine.enqueueMutation('update_status', props.lead.id, {
+          status: form.update_status,
+        });
+      }
+      if (form.next_follow_up_date) {
+        await syncEngine.enqueueMutation('create_followup', props.lead.id, {
+          scheduled_at: form.next_follow_up_date,
+          notes: 'Follow-up from call: ' + form.outcome,
+        });
+      }
+    }
     emit('saved');
     close();
   } catch (err: any) {
-    error.value = err.response?.data?.message || 'Failed to save call log.';
+    try {
+      await syncEngine.enqueueMutation('log_call', props.lead.id, {
+        outcome: form.outcome,
+        duration: form.duration_minutes,
+        notes: form.notes,
+      });
+      emit('saved');
+      close();
+    } catch {
+      error.value = err.response?.data?.message || 'Failed to save call log.';
+    }
   } finally {
     submitting.value = false;
   }

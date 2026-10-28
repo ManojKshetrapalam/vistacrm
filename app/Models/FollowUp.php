@@ -27,6 +27,8 @@ class FollowUp extends Model
         'reminder_status',
         'reminder_sent_at',
         'reminder_channel',
+        'client_uuid',
+        'version',
     ];
 
     protected $appends = [

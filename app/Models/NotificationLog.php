@@ -14,6 +14,7 @@ class NotificationLog extends Model
         'lead_id',
         'follow_up_id',
         'user_id',
+        'event_type',
         'reminder_key',
         'channel',
         'recipient',

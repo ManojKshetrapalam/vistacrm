@@ -28,3 +28,15 @@
 6. **Testing & Verification Standard**:
    - Any modification to database schemas, lead workflows, authorization policies, or import services must be accompanied by updated feature tests in `tests/Feature/`.
    - Always run `php artisan test` and `npm run build` before claiming completion.
+
+7. **Safe Archiving & Soft-Delete Invariant**:
+   - Leads must NEVER be permanently deleted directly from active pipelines. Deletion must strictly follow the two-stage lifecycle: Soft Delete (`deleted_at` via `SoftDeletes`) -> Archived status.
+   - Reference ID generation (`Lead::generateReferenceId()`) must ALWAYS query `static::withTrashed()` so sequential numbering remains monotonic and never collides with archived records.
+   - Permanent deletion (`forceDelete()`) is restricted to administrators, only permitted on records already soft-deleted, executed inside a database transaction cascading to activities, follow-ups, and notifications, and must be guarded by strict typed confirmation on the frontend.
+   - Mobile synchronization must propagate lead deletions (`deleted_lead_ids` via `/api/mobile/sync/pull`) so archived records are purged from local caches and pending alarms cancelled.
+
+8. **Employee Deactivation Safeguards**:
+   - The system must never permit deactivation of the last active administrator (`activeAdminsCount <= 1`).
+   - Self-deactivation is strictly forbidden.
+   - Deactivation must automatically revoke all active personal access tokens (`tokens()->delete()`) and purge all push device tokens (`deviceTokens()->delete()`).
+   - Deactivated employees retain their historic lead attribution unless explicitly reassigned via the bulk reassignment endpoint (`/api/employees/{id}/reassign-leads`).

@@ -15,9 +15,13 @@ use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     * Guaranteed 100% idempotent and repeatable without duplicating records.
+     */
     public function run(): void
     {
-        // 1. Seed Admin
+        // 1. Seed Administrator / Tenant Owner
         $admin = User::firstOrCreate(
             ['email' => 'admin@vistaboundintegrated.com'],
             [
@@ -37,40 +41,75 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 2. Seed 4 Initial Employees
-        $employeesData = [
+        if (empty($admin->username)) {
+            $admin->username = 'admin';
+            $admin->save();
+        }
+
+        // 2. Seed Team Roles (Sales Manager, Sales Executives, Accounts Executive)
+        $teamMembersData = [
+            [
+                'name' => 'Suresh Menon',
+                'username' => 'salesmanager',
+                'email' => 'sales.manager@vistaboundintegrated.com',
+                'phone' => '+919880000111',
+                'role' => 'employee',
+                'title' => 'Sales Manager',
+            ],
             [
                 'name' => 'Ananya Sharma',
+                'username' => 'ananya',
                 'email' => 'ananya@vistaboundintegrated.com',
                 'phone' => '+919880111221',
+                'role' => 'employee',
+                'title' => 'Sales Executive',
             ],
             [
                 'name' => 'Rohit Verma',
+                'username' => 'rohit',
                 'email' => 'rohit@vistaboundintegrated.com',
                 'phone' => '+919880222332',
+                'role' => 'employee',
+                'title' => 'Sales Executive',
             ],
             [
                 'name' => 'Priya Nair',
+                'username' => 'priya',
                 'email' => 'priya@vistaboundintegrated.com',
                 'phone' => '+919880333443',
+                'role' => 'employee',
+                'title' => 'Sales Executive',
             ],
             [
                 'name' => 'Karthik Rao',
+                'username' => 'karthik',
                 'email' => 'karthik@vistaboundintegrated.com',
                 'phone' => '+919880444554',
+                'role' => 'employee',
+                'title' => 'Sales Executive',
+            ],
+            [
+                'name' => 'Deepa Joshi',
+                'username' => 'accounts',
+                'email' => 'accounts@vistaboundintegrated.com',
+                'phone' => '+919880555665',
+                'role' => 'employee',
+                'title' => 'Accounts Executive',
             ],
         ];
 
-        $employees = [];
-        foreach ($employeesData as $emp) {
-            $employees[] = User::firstOrCreate(
+        $users = ['admin' => $admin];
+        foreach ($teamMembersData as $emp) {
+            $user = User::firstOrCreate(
                 ['email' => $emp['email']],
                 [
                     'name' => $emp['name'],
+                    'username' => $emp['username'],
                     'phone' => $emp['phone'],
-                    'role' => 'employee',
+                    'role' => $emp['role'],
                     'password' => Hash::make('Vistabound@2026'),
                     'is_active' => true,
+                    'must_change_password' => false,
                     'notification_preferences' => [
                         'whatsapp_enabled' => true,
                         'email_enabled' => true,
@@ -79,9 +118,25 @@ class DatabaseSeeder extends Seeder
                     ],
                 ]
             );
+
+            if (empty($user->username)) {
+                $user->username = $emp['username'];
+                $user->save();
+            }
+
+            $users[$emp['username']] = $user;
         }
 
-        // 3. Seed CRM Settings
+        // 3. Seed CRM Settings & Tenant / Company Configuration
+        CrmSetting::set('company_info', [
+            'name' => 'Vistabound Integrated Solutions LLP',
+            'tagline' => 'Building Businesses Beyond Boundaries',
+            'website' => 'https://vistaboundintegrated.com/',
+            'email' => 'vistaboundintegrated@gmail.com',
+            'phone' => '+916361232225',
+            'location' => 'RR Nagar, Bangalore',
+        ]);
+
         CrmSetting::set('lead_sources', [
             'Website',
             'WhatsApp Inbound',
@@ -98,16 +153,8 @@ class DatabaseSeeder extends Seeder
             'Enterprise Software Engineering',
             'Incubation & Strategic Investment',
             'Hospitality Management',
-            'Retail & Commerce Solutions'
-        ]);
-
-        CrmSetting::set('company_info', [
-            'name' => 'Vistabound Integrated Solutions LLP',
-            'tagline' => 'Building Businesses Beyond Boundaries',
-            'website' => 'https://vistaboundintegrated.com/',
-            'email' => 'vistaboundintegrated@gmail.com',
-            'phone' => '+916361232225',
-            'location' => 'RR Nagar, Bangalore',
+            'Retail & Commerce Solutions',
+            'Accounting & Compliance Solutions'
         ]);
 
         // 4. Seed WhatsApp Templates
@@ -150,9 +197,10 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        // 5. Seed Realistic Sample Leads
+        // 5. Seed Synthetic Demo Leads and Converted Customers
         $sampleLeads = [
             [
+                'ref' => 'VB-LD-2026-0001',
                 'name' => 'Rajesh Nambiar',
                 'phone' => '+919845012345',
                 'email' => 'rajesh.n@technex-systems.com',
@@ -162,12 +210,12 @@ class DatabaseSeeder extends Seeder
                 'additional_details' => 'Needs 24/7 hardware AMC and server maintenance for 120 workstations.',
                 'status' => 'follow_up',
                 'priority' => 'high',
-                'assigned_to' => $employees[0]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'ananya',
                 'next_follow_up_date' => Carbon::today()->setTime(14, 30),
                 'last_contact_date' => Carbon::now()->subDays(1),
             ],
             [
+                'ref' => 'VB-LD-2026-0002',
                 'name' => 'Sunita Rao',
                 'phone' => '+919876543210',
                 'email' => 'sunita@apexlogistics.in',
@@ -177,12 +225,12 @@ class DatabaseSeeder extends Seeder
                 'additional_details' => 'Looking to automate fleet tracking dispatch and custom ERP module.',
                 'status' => 'contacted',
                 'priority' => 'urgent',
-                'assigned_to' => $employees[1]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'rohit',
                 'next_follow_up_date' => Carbon::today()->setTime(16, 0),
                 'last_contact_date' => Carbon::now()->subHours(4),
             ],
             [
+                'ref' => 'VB-LD-2026-0003',
                 'name' => 'Vikramaditya Hegde',
                 'phone' => '+919900112233',
                 'email' => 'v.hegde@serenestay.com',
@@ -192,12 +240,12 @@ class DatabaseSeeder extends Seeder
                 'additional_details' => 'New boutique resort opening in Coorg. Interested in operational frameworks and central PMS.',
                 'status' => 'interested',
                 'priority' => 'high',
-                'assigned_to' => $employees[0]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'ananya',
                 'next_follow_up_date' => Carbon::tomorrow()->setTime(11, 0),
                 'last_contact_date' => Carbon::now()->subDays(2),
             ],
             [
+                'ref' => 'VB-LD-2026-0004',
                 'name' => 'Deepak Shenoy',
                 'phone' => '+919844055667',
                 'email' => 'deepak@cloudscale.co',
@@ -207,27 +255,27 @@ class DatabaseSeeder extends Seeder
                 'additional_details' => 'Kubernetes multi-cloud cost optimization and zero-trust security audit.',
                 'status' => 'new',
                 'priority' => 'medium',
-                'assigned_to' => $employees[2]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'priya',
                 'next_follow_up_date' => null,
                 'last_contact_date' => null,
             ],
             [
+                'ref' => 'VB-LD-2026-0005',
                 'name' => 'Kavita Menon',
                 'phone' => '+919741098765',
                 'email' => 'kavita@greengrovestores.com',
-                'company_name' => 'GreenGrove Organics',
+                'company_name' => 'GreenGrove Organics (Existing Customer)',
                 'source' => 'Referral',
                 'service_interest' => 'Retail & Commerce Solutions',
-                'additional_details' => 'Expanding omnichannel POS across 6 retail outlets in Bangalore.',
+                'additional_details' => 'Omnichannel POS active across 6 retail outlets. Converted into active customer contract.',
                 'status' => 'converted',
                 'priority' => 'high',
-                'assigned_to' => $employees[3]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'karthik',
                 'next_follow_up_date' => null,
                 'last_contact_date' => Carbon::now()->subDays(3),
             ],
             [
+                'ref' => 'VB-LD-2026-0006',
                 'name' => 'Manoj Kulkarni',
                 'phone' => '+919611223344',
                 'email' => 'manoj@kulkarnitraders.in',
@@ -237,62 +285,108 @@ class DatabaseSeeder extends Seeder
                 'additional_details' => 'Follow up on hardware upgrade proposal.',
                 'status' => 'not_reachable',
                 'priority' => 'low',
-                'assigned_to' => $employees[1]->id,
-                'created_by' => $admin->id,
+                'assigned_username' => 'rohit',
                 'next_follow_up_date' => Carbon::today()->addDays(2)->setTime(10, 0),
                 'last_contact_date' => Carbon::now()->subDays(4),
+            ],
+            [
+                'ref' => 'VB-LD-2026-0007',
+                'name' => 'Arun Balakrishnan',
+                'phone' => '+919448011223',
+                'email' => 'arun@zenithcorp.in',
+                'company_name' => 'Zenith Corp India (Customer)',
+                'source' => 'Website',
+                'service_interest' => 'Enterprise Software Engineering',
+                'additional_details' => 'Enterprise annual maintenance contract and compliance audit signed.',
+                'status' => 'converted',
+                'priority' => 'high',
+                'assigned_username' => 'salesmanager',
+                'next_follow_up_date' => null,
+                'last_contact_date' => Carbon::now()->subDays(7),
             ],
         ];
 
         foreach ($sampleLeads as $leadData) {
             $normalizedPhone = Lead::normalizePhone($leadData['phone']);
-            $lead = Lead::create(array_merge($leadData, [
-                'reference_id' => Lead::generateReferenceId(),
-                'phone_normalized' => $normalizedPhone,
-            ]));
+            $assignedUser = isset($users[$leadData['assigned_username']]) ? $users[$leadData['assigned_username']] : null;
 
-            // Seed initial activity
-            LeadActivity::create([
-                'lead_id' => $lead->id,
-                'user_id' => $admin->id,
-                'activity_type' => 'lead_created',
-                'title' => 'Lead created in CRM',
-                'description' => "Source: {$lead->source} | Service: {$lead->service_interest}",
-                'metadata' => ['source' => $lead->source],
-            ]);
+            $lead = Lead::firstOrCreate(
+                ['phone_normalized' => $normalizedPhone],
+                [
+                    'reference_id' => $leadData['ref'],
+                    'name' => $leadData['name'],
+                    'phone' => $leadData['phone'],
+                    'email' => $leadData['email'],
+                    'company_name' => $leadData['company_name'],
+                    'source' => $leadData['source'],
+                    'service_interest' => $leadData['service_interest'],
+                    'additional_details' => $leadData['additional_details'],
+                    'status' => $leadData['status'],
+                    'priority' => $leadData['priority'],
+                    'assigned_to' => $assignedUser ? $assignedUser->id : null,
+                    'created_by' => $admin->id,
+                    'next_follow_up_date' => $leadData['next_follow_up_date'],
+                    'last_contact_date' => $leadData['last_contact_date'],
+                ]
+            );
+
+            // Seed initial activity idempotently
+            LeadActivity::firstOrCreate(
+                [
+                    'lead_id' => $lead->id,
+                    'activity_type' => 'lead_created',
+                ],
+                [
+                    'user_id' => $admin->id,
+                    'title' => 'Lead created in CRM',
+                    'description' => "Source: {$lead->source} | Service: {$lead->service_interest}",
+                    'metadata' => ['source' => $lead->source],
+                ]
+            );
 
             if ($lead->assigned_to) {
-                $assignedUser = User::find($lead->assigned_to);
-                LeadActivity::create([
-                    'lead_id' => $lead->id,
-                    'user_id' => $admin->id,
-                    'activity_type' => 'assignment_change',
-                    'title' => "Assigned to {$assignedUser->name}",
-                    'description' => "Initial assignment to {$assignedUser->name}",
-                    'metadata' => ['assigned_to' => $assignedUser->id, 'assignee_name' => $assignedUser->name],
-                ]);
+                LeadActivity::firstOrCreate(
+                    [
+                        'lead_id' => $lead->id,
+                        'activity_type' => 'assignment_change',
+                    ],
+                    [
+                        'user_id' => $admin->id,
+                        'title' => "Assigned to {$assignedUser->name}",
+                        'description' => "Initial assignment to {$assignedUser->name}",
+                        'metadata' => ['assigned_to' => $assignedUser->id, 'assignee_name' => $assignedUser->name],
+                    ]
+                );
 
-                // Create initial assignment notification
-                NotificationLog::create([
-                    'lead_id' => $lead->id,
-                    'user_id' => $assignedUser->id,
-                    'channel' => 'in_app',
-                    'recipient' => $assignedUser->email,
-                    'title' => 'New Lead Assigned',
-                    'message' => "You have been assigned lead {$lead->name} ({$lead->reference_id}) for {$lead->service_interest}.",
-                    'status' => 'delivered',
-                    'is_read' => false,
-                ]);
+                // Create initial assignment notification idempotently
+                NotificationLog::firstOrCreate(
+                    [
+                        'lead_id' => $lead->id,
+                        'user_id' => $assignedUser->id,
+                        'channel' => 'in_app',
+                    ],
+                    [
+                        'recipient' => $assignedUser->email,
+                        'title' => 'New Lead Assigned',
+                        'message' => "You have been assigned lead {$lead->name} ({$lead->reference_id}) for {$lead->service_interest}.",
+                        'status' => 'delivered',
+                        'is_read' => false,
+                    ]
+                );
             }
 
             if ($lead->next_follow_up_date) {
-                FollowUp::create([
-                    'lead_id' => $lead->id,
-                    'user_id' => $lead->assigned_to ?: $admin->id,
-                    'scheduled_at' => $lead->next_follow_up_date,
-                    'status' => 'pending',
-                    'notes' => 'Discuss proposal and clarify service requirements.',
-                ]);
+                FollowUp::firstOrCreate(
+                    [
+                        'lead_id' => $lead->id,
+                        'scheduled_at' => $lead->next_follow_up_date->format('Y-m-d H:i:s'),
+                    ],
+                    [
+                        'user_id' => $lead->assigned_to ?: $admin->id,
+                        'status' => 'pending',
+                        'notes' => 'Discuss proposal and clarify service requirements.',
+                    ]
+                );
             }
         }
     }

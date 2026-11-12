@@ -4,9 +4,11 @@ import { Capacitor } from '@capacitor/core';
 // Determine base API endpoint dynamically (supports Capacitor mobile, root domain, and /CRM subdirectory deployments)
 export const getApiBase = (): string => {
   if (typeof window !== 'undefined' && localStorage.getItem('vb_crm_server_url')) {
-    const customUrl = localStorage.getItem('vb_crm_server_url')!;
-    if (customUrl.startsWith('https://') || customUrl.startsWith('http://localhost') || customUrl.startsWith('http://10.0.2.2')) {
-      return customUrl;
+    const customUrl = localStorage.getItem('vb_crm_server_url')!.trim();
+    // Allow HTTPS always, and allow private LAN/emulator HTTP URLs for development
+    const isLocalOrPrivateHttp = /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?(\/.*)?$/i;
+    if (customUrl.startsWith('https://') || isLocalOrPrivateHttp.test(customUrl)) {
+      return customUrl.replace(/\/+$/, '');
     }
   }
   if (Capacitor.isNativePlatform()) {

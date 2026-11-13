@@ -283,4 +283,85 @@ class PermissionManagementTest extends TestCase
 
         $responseAudit->assertStatus(403);
     }
+
+    public function test_direct_id_manipulation_prevented_on_lead_show_and_update(): void
+    {
+        // Lead assigned to employee2 (private lead)
+        $privateLead = $this->createLead('Cloud & DevOps Solutions', $this->employee2->id);
+
+        // Ensure employee1 is assigned_only
+        DB::table('user_visibility_overrides')->updateOrInsert(
+            ['user_id' => $this->employee1->id],
+            ['scope' => 'assigned_only', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // 1. Employee 1 attempts to view Employee 2's lead directly
+        $showRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->getJson("/api/leads/{$privateLead->id}");
+
+        $showRes->assertStatus(403);
+
+        // 2. Employee 1 attempts to update Employee 2's lead directly
+        $updateRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->putJson("/api/leads/{$privateLead->id}", [
+                'name' => 'Tampered Lead Name',
+            ]);
+
+        $updateRes->assertStatus(403);
+
+        // 3. Employee 1 attempts to log call on Employee 2's lead directly
+        $callRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson("/api/leads/{$privateLead->id}/call", [
+                'outcome' => 'Interested',
+                'notes' => 'Tampered call log',
+            ]);
+
+        $callRes->assertStatus(403);
+
+        // Clean up
+        $privateLead->forceDelete();
+    }
+
+    public function test_category_restrictions_enforced_during_mobile_sync_push(): void
+    {
+        // Lead assigned to employee1, but in 'Retail & Commerce Solutions'
+        $retailLead = $this->createLead('Retail & Commerce Solutions', $this->employee1->id);
+
+        // Restrict employee1 to only 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $token1 = $this->employee1->createToken('emp1-mobile-test')->plainTextToken;
+
+        // Push offline mutation on forbidden category lead
+        $pushRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/mobile/sync/push', [
+                'mutations' => [
+                    [
+                        'uuid' => 'test-mobile-uuid-' . rand(10000, 99999),
+                        'operation' => 'create_note',
+                        'lead_id' => $retailLead->id,
+                        'payload' => ['note' => 'Attempted note on restricted category lead'],
+                    ],
+                ],
+            ]);
+
+        $pushRes->assertStatus(200);
+        $results = $pushRes->json('results');
+        $this->assertNotEmpty($results);
+        $this->assertEquals('forbidden', $results[0]['status']);
+        $this->assertStringContainsString('access denied', strtolower($results[0]['message']));
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        $retailLead->forceDelete();
+    }
 }

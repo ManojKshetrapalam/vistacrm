@@ -72,6 +72,13 @@ class ImportController extends Controller
             'assigned_to' => 'nullable|exists:users,id',
         ]);
 
+        if (($validated['assignment_mode'] ?? 'unassigned') === 'specific' && !empty($validated['assigned_to'])) {
+            $assignee = \App\Models\User::find($validated['assigned_to']);
+            if (!$assignee || !$assignee->is_active) {
+                return response()->json(['message' => 'Target assignee must be an active user.'], 422);
+            }
+        }
+
         $fullPath = Storage::path($validated['file_token']);
         if (!file_exists($fullPath)) {
             return response()->json(['message' => 'Uploaded file session has expired. Please re-upload the file.'], 404);

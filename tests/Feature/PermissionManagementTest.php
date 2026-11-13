@@ -364,4 +364,559 @@ class PermissionManagementTest extends TestCase
         DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
         $retailLead->forceDelete();
     }
+
+    /**
+     * SEC-01 Tests: Broken Object Level Authorization (BOLA)
+     */
+    public function test_sec01_unauthorized_lead_archive_blocked_by_visibility(): void
+    {
+        $privateLead = $this->createLead('Cloud & DevOps Solutions', $this->employee2->id);
+
+        // Grant employee1 the functional permission 'leads.archive'
+        $perm = Permission::where('name', 'leads.archive')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        // Ensure visibility is assigned_only
+        DB::table('user_visibility_overrides')->updateOrInsert(
+            ['user_id' => $this->employee1->id],
+            ['scope' => 'assigned_only', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Attempt to archive employee2's lead
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->deleteJson("/api/leads/{$privateLead->id}");
+
+        $res->assertStatus(403);
+        $this->assertNull($privateLead->fresh()->deleted_at);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+        DB::table('user_visibility_overrides')->where('user_id', $this->employee1->id)->delete();
+        $privateLead->forceDelete();
+    }
+
+    public function test_sec01_unauthorized_lead_restore_blocked_by_visibility(): void
+    {
+        $privateLead = $this->createLead('Cloud & DevOps Solutions', $this->employee2->id);
+        $privateLead->delete(); // Soft delete
+
+        // Grant employee1 the functional permission 'leads.restore'
+        $perm = Permission::where('name', 'leads.restore')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        // Ensure visibility is assigned_only
+        DB::table('user_visibility_overrides')->updateOrInsert(
+            ['user_id' => $this->employee1->id],
+            ['scope' => 'assigned_only', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Attempt to restore employee2's archived lead
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson("/api/leads/{$privateLead->id}/restore");
+
+        $res->assertStatus(403);
+        $this->assertTrue($privateLead->fresh()->trashed());
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+        DB::table('user_visibility_overrides')->where('user_id', $this->employee1->id)->delete();
+        $privateLead->forceDelete();
+    }
+
+    public function test_sec01_unauthorized_lead_reassignment_blocked_by_visibility(): void
+    {
+        $privateLead = $this->createLead('Cloud & DevOps Solutions', $this->employee2->id);
+
+        // Grant employee1 the functional permission 'leads.assign'
+        $perm = Permission::where('name', 'leads.assign')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        // Ensure visibility is assigned_only
+        DB::table('user_visibility_overrides')->updateOrInsert(
+            ['user_id' => $this->employee1->id],
+            ['scope' => 'assigned_only', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Attempt to reassign employee2's lead to employee1
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson("/api/leads/{$privateLead->id}/assign", [
+                'assigned_to' => $this->employee1->id,
+            ]);
+
+        $res->assertStatus(403);
+        $this->assertEquals($this->employee2->id, $privateLead->fresh()->assigned_to);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+        DB::table('user_visibility_overrides')->where('user_id', $this->employee1->id)->delete();
+        $privateLead->forceDelete();
+    }
+
+    public function test_sec01_lead_assignment_to_inactive_user_rejected(): void
+    {
+        $lead = $this->createLead('Cloud & DevOps Solutions', $this->employee1->id);
+
+        // Deactivate employee2 temporarily
+        $this->employee2->is_active = false;
+        $this->employee2->save();
+
+        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+            ->postJson("/api/leads/{$lead->id}/assign", [
+                'assigned_to' => $this->employee2->id,
+            ]);
+
+        $res->assertStatus(422);
+        $res->assertJsonFragment(['message' => 'Cannot assign leads to an inactive user.']);
+
+        // Reactivate employee2 and clean up
+        $this->employee2->is_active = true;
+        $this->employee2->save();
+        $lead->forceDelete();
+    }
+
+    public function test_sec01_lead_assignment_to_category_ineligible_user_rejected(): void
+    {
+        $leadRetail = $this->createLead('Retail & Commerce Solutions', null);
+
+        // Restrict employee1 to only 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+            ->postJson("/api/leads/{$leadRetail->id}/assign", [
+                'assigned_to' => $this->employee1->id,
+            ]);
+
+        $res->assertStatus(422);
+        $res->assertJsonFragment(['message' => "Destination user is not authorized to handle this lead's service category."]);
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        $leadRetail->forceDelete();
+    }
+
+    public function test_sec01_authorized_user_can_archive_restore_and_assign_permitted_lead(): void
+    {
+        $lead = $this->createLead('Cloud & DevOps Solutions', $this->employee1->id);
+
+        // Grant employee1 permissions
+        foreach (['leads.archive', 'leads.restore', 'leads.assign'] as $permName) {
+            $perm = Permission::where('name', $permName)->firstOrFail();
+            DB::table('user_has_permissions')->updateOrInsert(
+                ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+                ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+            );
+        }
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Archive own lead
+        $delRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->deleteJson("/api/leads/{$lead->id}");
+        $delRes->assertStatus(200);
+        $this->assertTrue($lead->fresh()->trashed());
+
+        // Restore own lead
+        $restRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson("/api/leads/{$lead->id}/restore");
+        $restRes->assertStatus(200);
+        $this->assertFalse($lead->fresh()->trashed());
+
+        // Assign to self
+        $assignRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson("/api/leads/{$lead->id}/assign", ['assigned_to' => $this->employee1->id]);
+        $assignRes->assertStatus(200);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+        $lead->forceDelete();
+    }
+
+    /**
+     * SEC-02 Tests: Permission Catalog Initialization & User Mapping
+     */
+    public function test_sec02_baseline_permissions_initialize_and_custom_roles_survive(): void
+    {
+        $this->assertDatabaseHas('permissions', ['name' => 'leads.view']);
+        $this->assertDatabaseHas('permissions', ['name' => 'leads.archive']);
+        $this->assertDatabaseHas('permissions', ['name' => 'leads.restore']);
+        $this->assertDatabaseHas('permissions', ['name' => 'leads.assign']);
+
+        // Create a custom role with custom permissions
+        $customRole = Role::create([
+            'name' => 'custom_support_agent_' . rand(1000, 9999),
+            'display_name' => 'Support Desk Agent',
+            'description' => 'Custom role',
+            'is_system' => false,
+        ]);
+        $customRole->setVisibilityScope('assigned_only');
+        $customPerm = Permission::where('name', 'leads.view')->firstOrFail();
+        $customRole->permissions()->attach([$customPerm->id]);
+
+        // Re-run seeder to verify idempotency and preservation
+        $seeder = new \Database\Seeders\PermissionsSeeder();
+        $seeder->run();
+
+        // Custom role is preserved and permissions remain intact
+        $freshRole = Role::find($customRole->id);
+        $this->assertNotNull($freshRole);
+        $this->assertEquals(1, $freshRole->permissions()->count());
+
+        // Clean up
+        $customRole->delete();
+    }
+
+    public function test_sec02_ambiguous_user_responsibility_preserved_unmapped(): void
+    {
+        $ambiguousUser = User::create([
+            'name' => 'Ambiguous Employee',
+            'email' => 'ambiguous_' . rand(1000, 9999) . '@example.com',
+            'password' => bcrypt('password123'),
+            'role' => 'employee',
+            'role_id' => null,
+            'is_active' => true,
+        ]);
+
+        $seeder = new \Database\Seeders\PermissionsSeeder();
+        $seeder->run();
+
+        // Must remain null (never guessed or force-mapped)
+        $this->assertNull($ambiguousUser->fresh()->role_id);
+
+        $ambiguousUser->forceDelete();
+    }
+
+    /**
+     * SEC-03 Tests: Lead Category Validation on Creation Paths
+     */
+    public function test_sec03_restricted_user_cannot_create_lead_in_unauthorized_category(): void
+    {
+        // Restrict employee1 to only 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Grant employee1 leads.create
+        $perm = Permission::where('name', 'leads.create')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Post lead under forbidden category 'Retail & Commerce Solutions'
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/leads', [
+                'name' => 'Forbidden Cat Lead',
+                'phone' => '+91 9988776655',
+                'service_interest' => 'Retail & Commerce Solutions',
+            ]);
+
+        $res->assertStatus(403);
+        $res->assertJsonFragment(['message' => 'You are not authorized to create leads under this service vertical.']);
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+    }
+
+    public function test_sec03_restricted_user_cannot_create_lead_without_category(): void
+    {
+        // Restrict employee1 to 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $perm = Permission::where('name', 'leads.create')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        // Post lead without category
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/leads', [
+                'name' => 'Missing Cat Lead',
+                'phone' => '+91 9988776644',
+                'service_interest' => null,
+            ]);
+
+        $res->assertStatus(422);
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+    }
+
+    public function test_sec03_restricted_user_can_create_lead_in_authorized_category(): void
+    {
+        // Restrict employee1 to 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $perm = Permission::where('name', 'leads.create')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $token1 = $this->employee1->createToken('emp1-test')->plainTextToken;
+
+        $phone = '+91 91234' . rand(10000, 99999);
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/leads', [
+                'name' => 'Authorized Cat Lead',
+                'phone' => $phone,
+                'service_interest' => 'Cloud & DevOps Solutions',
+            ]);
+
+        $res->assertStatus(201);
+        $createdId = $res->json('lead.id');
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->where('permission_id', $perm->id)->delete();
+        if ($createdId) {
+            Lead::find($createdId)?->forceDelete();
+        }
+    }
+
+    public function test_sec03_mobile_offline_sync_push_rejects_unauthorized_category_lead(): void
+    {
+        // Restrict employee1 to 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $token1 = $this->employee1->createToken('emp1-mobile-test')->plainTextToken;
+
+        $pushRes = $this->withHeader('Authorization', 'Bearer ' . $token1)
+            ->postJson('/api/mobile/sync/push', [
+                'mutations' => [
+                    [
+                        'uuid' => 'test-create-lead-forbidden-' . rand(10000, 99999),
+                        'operation' => 'create_lead',
+                        'payload' => [
+                            'name' => 'Offline Lead Forbidden Vertical',
+                            'phone' => '+91 98765' . rand(10000, 99999),
+                            'service_interest' => 'Retail & Commerce Solutions',
+                        ],
+                    ],
+                ],
+            ]);
+
+        $pushRes->assertStatus(200);
+        $results = $pushRes->json('results');
+        $this->assertNotEmpty($results);
+        $this->assertEquals('forbidden', $results[0]['status']);
+        $this->assertStringContainsString('unauthorized category', strtolower($results[0]['message']));
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+    }
+
+    /**
+     * SEC-04 Tests: NULL Category Access Consistency
+     */
+    public function test_sec04_null_and_empty_category_leads_uniformly_inaccessible_to_restricted_user(): void
+    {
+        // Create lead with null service_interest
+        $leadNull = Lead::create([
+            'reference_id' => Lead::generateReferenceId(),
+            'name' => 'Lead Null Category',
+            'phone' => '+91 94444' . rand(10000, 99999),
+            'phone_normalized' => '94444' . rand(10000, 99999),
+            'service_interest' => null,
+            'assigned_to' => $this->employee1->id,
+            'created_by' => $this->admin->id,
+        ]);
+
+        // Create lead with whitespace service_interest
+        $leadBlank = Lead::create([
+            'reference_id' => Lead::generateReferenceId(),
+            'name' => 'Lead Blank Category',
+            'phone' => '+91 93333' . rand(10000, 99999),
+            'phone_normalized' => '93333' . rand(10000, 99999),
+            'service_interest' => '   ',
+            'assigned_to' => $this->employee1->id,
+            'created_by' => $this->admin->id,
+        ]);
+
+        // Restrict employee1 to only 'Cloud & DevOps Solutions'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->employee1->refresh();
+
+        // 1. Check canAccessLead returns false for both
+        $this->assertFalse($this->employee1->canAccessLead($leadNull));
+        $this->assertFalse($this->employee1->canAccessLead($leadBlank));
+
+        // 2. Check query scope excludes both
+        $accessibleIds = Lead::accessibleBy($this->employee1)->pluck('id')->toArray();
+        $this->assertNotContains($leadNull->id, $accessibleIds);
+        $this->assertNotContains($leadBlank->id, $accessibleIds);
+
+        // 3. Unrestricted admin can access both
+        $this->assertTrue($this->admin->canAccessLead($leadNull));
+        $this->assertTrue($this->admin->canAccessLead($leadBlank));
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        $leadNull->forceDelete();
+        $leadBlank->forceDelete();
+    }
+
+    /**
+     * SEC-05 Tests: Employee Permission Audit Trail
+     */
+    public function test_sec05_employee_creation_and_updates_generate_immutable_audit_logs(): void
+    {
+        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
+
+        // 1. Create Employee
+        $empEmail = 'test_audit_emp_' . rand(1000, 9999) . '@example.com';
+        $createRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+            ->postJson('/api/employees', [
+                'name' => 'Audit Test User',
+                'email' => $empEmail,
+                'password' => 'SecurePass123!',
+                'role' => 'employee',
+                'team_id' => $this->teamSales->id,
+            ]);
+
+        $createRes->assertStatus(201);
+        $empId = $createRes->json('employee.id');
+
+        $this->assertDatabaseHas('permission_audit_logs', [
+            'actor_id' => $this->admin->id,
+            'target_type' => 'user',
+            'target_id' => $empId,
+            'action' => 'employee_created',
+        ]);
+
+        // 2. Update Role
+        $managerRole = Role::where('name', 'sales_manager')->firstOrFail();
+        $updateRoleRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+            ->putJson("/api/employees/{$empId}", [
+                'role_id' => $managerRole->id,
+            ]);
+
+        $updateRoleRes->assertStatus(200);
+
+        $this->assertDatabaseHas('permission_audit_logs', [
+            'actor_id' => $this->admin->id,
+            'target_type' => 'user',
+            'target_id' => $empId,
+            'action' => 'employee_role_changed',
+        ]);
+
+        // 3. Update Team
+        $updateTeamRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+            ->putJson("/api/employees/{$empId}", [
+                'team_id' => $this->teamRetail->id,
+            ]);
+
+        $updateTeamRes->assertStatus(200);
+
+        $this->assertDatabaseHas('permission_audit_logs', [
+            'actor_id' => $this->admin->id,
+            'target_type' => 'user',
+            'target_id' => $empId,
+            'action' => 'employee_team_changed',
+        ]);
+
+        // Clean up
+        User::find($empId)?->forceDelete();
+    }
+
+    /**
+     * SEC-06 Tests: Case and Whitespace Category Normalization
+     */
+    public function test_sec06_case_insensitive_and_whitespace_category_normalization(): void
+    {
+        // Allowed category with mixed case
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->employee1->refresh();
+
+        // 1. Test isCategoryAllowed with leading/trailing spaces and lowercase
+        $this->assertTrue($this->employee1->isCategoryAllowed('  cloud & devops solutions  '));
+        $this->assertTrue($this->employee1->isCategoryAllowed('CLOUD & DEVOPS SOLUTIONS'));
+        $this->assertFalse($this->employee1->isCategoryAllowed('  retail & commerce solutions  '));
+
+        // 2. Create lead with lowercase and whitespace
+        $leadNorm = $this->createLead('  cloud & devops solutions  ', $this->employee1->id);
+
+        $this->assertTrue($this->employee1->canAccessLead($leadNorm));
+
+        $accessibleIds = Lead::accessibleBy($this->employee1)->pluck('id')->toArray();
+        $this->assertContains($leadNorm->id, $accessibleIds);
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        $leadNorm->forceDelete();
+    }
 }

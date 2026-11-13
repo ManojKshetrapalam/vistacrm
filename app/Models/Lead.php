@@ -80,6 +80,23 @@ class Lead extends Model
         return $digits;
     }
 
+    /**
+     * Normalize service vertical / category strings for consistent cross-platform comparison.
+     */
+    public static function normalizeCategory(?string $category): ?string
+    {
+        if ($category === null) {
+            return null;
+        }
+
+        $trimmed = trim($category);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return mb_strtolower($trimmed, 'UTF-8');
+    }
+
     public static function generateReferenceId(): string
     {
         $year = date('Y');
@@ -137,7 +154,15 @@ class Lead extends Model
         // Apply category filter if user has explicit restrictions
         $allowedCats = $user->getEffectiveAllowedCategories();
         if ($allowedCats !== null) {
-            $query->whereIn('service_interest', $allowedCats);
+            $normalizedAllowed = array_values(array_filter(array_map([static::class, 'normalizeCategory'], $allowedCats)));
+            if (empty($normalizedAllowed)) {
+                $query->whereRaw('0 = 1');
+            } else {
+                $placeholders = implode(',', array_fill(0, count($normalizedAllowed), '?'));
+                $query->whereNotNull('service_interest')
+                      ->whereRaw("TRIM(service_interest) != ''")
+                      ->whereRaw("LOWER(TRIM(service_interest)) IN ({$placeholders})", $normalizedAllowed);
+            }
         }
 
         // Apply visibility scope

@@ -243,7 +243,31 @@ class User extends Authenticatable
             $effective = array_values(array_diff($effective, $userDenied));
         }
 
-        return $effective;
+        return array_values(array_unique(array_filter(array_map('trim', $effective))));
+    }
+
+    /**
+     * Check if a specific service category/vertical is permitted for this user.
+     * Null or empty category is strictly disallowed if the user is category-restricted.
+     */
+    public function isCategoryAllowed(?string $category): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        $allowedCats = $this->getEffectiveAllowedCategories();
+        if ($allowedCats === null) {
+            return true;
+        }
+
+        $normCat = Lead::normalizeCategory($category);
+        if ($normCat === null) {
+            return false;
+        }
+
+        $normalizedAllowed = array_values(array_filter(array_map([Lead::class, 'normalizeCategory'], $allowedCats)));
+        return in_array($normCat, $normalizedAllowed, true);
     }
 
     /**
@@ -272,8 +296,7 @@ class User extends Authenticatable
         }
 
         // Check category restriction
-        $allowedCats = $this->getEffectiveAllowedCategories();
-        if ($allowedCats !== null && !empty($lead->service_interest) && !in_array($lead->service_interest, $allowedCats)) {
+        if (!$this->isCategoryAllowed($lead->service_interest)) {
             return false;
         }
 

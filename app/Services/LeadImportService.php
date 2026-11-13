@@ -170,6 +170,20 @@ class LeadImportService
                 continue;
             }
 
+            // Mandatory category validation for restricted users (SEC-03)
+            if ($user->getEffectiveAllowedCategories() !== null) {
+                if (empty($service) || !$user->isCategoryAllowed($service)) {
+                    $invalidCount++;
+                    $failedRows[] = [
+                        'row' => $rowNum,
+                        'name' => $name,
+                        'phone' => $phone,
+                        'reason' => "Unauthorized category ('" . ($service ?: 'None') . "'). You are not authorized to import leads under this service vertical.",
+                    ];
+                    continue;
+                }
+            }
+
             $normalizedPhone = Lead::normalizePhone($phone);
             if (empty($normalizedPhone) || strlen($normalizedPhone) < 7) {
                 $invalidCount++;

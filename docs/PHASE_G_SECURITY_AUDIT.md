@@ -220,15 +220,15 @@ The full test suite was executed, including new security test scenarios:
    PASS  Tests\Feature\CrmWorkflowTest (5 tests)
    PASS  Tests\Feature\ExampleTest (1 test)
    PASS  Tests\Feature\FollowUpReminderTest (9 tests)
-   PASS  Tests\Feature\LeadImportWorkflowTest (1 test)
+   PASS  Tests\Feature\LeadImportWorkflowTest (2 tests)
    PASS  Tests\Feature\MobileSyncWorkflowTest (5 tests)
    PASS  Tests\Feature\NotificationPollingWorkflowTest (8 tests)
-   PASS  Tests\Feature\PermissionManagementTest (9 tests)
+   PASS  Tests\Feature\PermissionManagementTest (24 tests)
    ----------------------------------------------------------------------
-   Total: 53 tests passed (261 assertions) | Duration: 15.22s
+   Total: 69 tests passed (313 assertions) | Duration: 6.99s
 ```
 
-All security verification tests passed:
+All security verification and regression tests passed:
 - `test_role_template_inheritance` (Verified)
 - `test_user_explicit_allow_overrides_role_omission` (Verified)
 - `test_user_explicit_deny_overrides_role_grant` (Verified)
@@ -238,33 +238,149 @@ All security verification tests passed:
 - `test_unauthorized_user_cannot_access_roles_endpoints` (Verified)
 - `test_direct_id_manipulation_prevented_on_lead_show_and_update` (Verified)
 - `test_category_restrictions_enforced_during_mobile_sync_push` (Verified)
+- `test_sec01_unauthorized_lead_archive_blocked_by_visibility` (Verified)
+- `test_sec01_unauthorized_lead_restore_blocked_by_visibility` (Verified)
+- `test_sec01_unauthorized_lead_reassignment_blocked_by_visibility` (Verified)
+- `test_sec01_lead_assignment_to_inactive_user_rejected` (Verified)
+- `test_sec01_lead_assignment_to_category_ineligible_user_rejected` (Verified)
+- `test_sec01_authorized_user_can_archive_restore_and_assign_permitted_lead` (Verified)
+- `test_sec02_baseline_permissions_initialize_and_custom_roles_survive` (Verified)
+- `test_sec02_ambiguous_user_responsibility_preserved_unmapped` (Verified)
+- `test_sec03_restricted_user_cannot_create_lead_in_unauthorized_category` (Verified)
+- `test_sec03_restricted_user_cannot_create_lead_without_category` (Verified)
+- `test_sec03_restricted_user_can_create_lead_in_authorized_category` (Verified)
+- `test_sec03_mobile_offline_sync_push_rejects_unauthorized_category_lead` (Verified)
+- `test_sec03_csv_import_enforces_user_category_restrictions` (Verified)
+- `test_sec04_null_and_empty_category_leads_uniformly_inaccessible_to_restricted_user` (Verified)
+- `test_sec05_employee_creation_and_updates_generate_immutable_audit_logs` (Verified)
+- `test_sec06_case_insensitive_and_whitespace_category_normalization` (Verified)
 
 ---
 
-## 9. Comprehensive Findings Classification
+## 9. Comprehensive Findings Classification & Remediation Status
 
 | ID | Title | Severity | Component | Remediated in Branch | Status |
 |---|---|---|---|---|---|
-| **SEC-01** | BOLA / Scope bypass in Lead archive, restore, and assign | **HIGH** | `LeadController.php` | Pending Fix | **BLOCKER** |
-| **SEC-02** | Missing baseline role/permission seeding in production migration | **HIGH** | `Database/Deploy` | Pending Fix | **BLOCKER** |
-| **SEC-03** | Lead creation ignores user vertical category restrictions | **MEDIUM** | `LeadController@store` | Pending Fix | Action Needed |
-| **SEC-04** | Category discrepancy on leads with `service_interest = NULL` | **MEDIUM** | `User.php` / `Lead.php` | Pending Fix | Action Needed |
-| **SEC-05** | Employee role/team updates bypass permission audit trail | **MEDIUM** | `EmployeeController.php` | Pending Fix | Action Needed |
-| **SEC-06** | Case-sensitivity mismatch between PHP and MySQL collation | **LOW** | `User.php` | Pending Fix | Recommended |
+| **SEC-01** | BOLA / Scope bypass in Lead archive, restore, and assign | **HIGH** | `LeadController.php` | `fix/rbac-security-remediation` | **REMEDIATED** |
+| **SEC-02** | Missing baseline role/permission seeding in production migration | **HIGH** | `database/migrations` | `fix/rbac-security-remediation` | **REMEDIATED** |
+| **SEC-03** | Lead creation ignores user vertical category restrictions | **MEDIUM** | `LeadController`, `LeadImportService`, `MobileSyncController` | `fix/rbac-security-remediation` | **REMEDIATED** |
+| **SEC-04** | Category discrepancy on leads with `service_interest = NULL` | **MEDIUM** | `User.php` / `Lead.php` | `fix/rbac-security-remediation` | **REMEDIATED** |
+| **SEC-05** | Employee role/team updates bypass permission audit trail | **MEDIUM** | `EmployeeController.php` | `fix/rbac-security-remediation` | **REMEDIATED** |
+| **SEC-06** | Case-sensitivity mismatch between PHP and MySQL collation | **LOW** | `User.php` / `Lead.php` | `fix/rbac-security-remediation` | **REMEDIATED** |
 
 ---
 
-## 10. Production Deployment Recommendation
+## 10. Detailed Remediation Audit & Evidence (Phase G.2)
 
-### Recommendation: **DEFER DEPLOYMENT UNTIL HIGH-SEVERITY FINDINGS ARE REMEDIATED**
+### 10.1 SEC-01: Lead Broken Object Level Authorization (BOLA)
+- **Original Finding:** `destroy()`, `restore()`, and `assign()` evaluated only functional permissions without enforcing record-level visibility (`$user->canAccessLead($lead)`). Furthermore, `assign()` accepted destination users without verifying activity status or category eligibility.
+- **Root Cause:** Authorization check stopped at `$user->hasPermission(...)` and omitted record instance authorization.
+- **Remediation:**
+  - Added `$user->canAccessLead($lead)` check to `destroy()`, `restore()`, `forceDelete()`, and `assign()`. Unauthorized requests are rejected with HTTP 403 (`Unauthorized access to this lead.`) without disclosing lead metadata.
+  - Implemented centralized destination user validation helper `validateAssignee(User $actor, ?int $targetUserId, ?string $serviceInterest)`.
+  - Enforced that destination users must exist and be active (`is_active = true`), belong to the acting user's team if the actor's scope is `team_only`, and possess permission for the lead's service category (`$targetUser->isCategoryAllowed($serviceInterest)`).
+- **Files Modified:** `app/Http/Controllers/Api/LeadController.php`
+- **Regression Tests:**
+  - `test_sec01_unauthorized_lead_archive_blocked_by_visibility`
+  - `test_sec01_unauthorized_lead_restore_blocked_by_visibility`
+  - `test_sec01_unauthorized_lead_reassignment_blocked_by_visibility`
+  - `test_sec01_lead_assignment_to_inactive_user_rejected`
+  - `test_sec01_lead_assignment_to_category_ineligible_user_rejected`
+  - `test_sec01_authorized_user_can_archive_restore_and_assign_permitted_lead`
+- **Evidence:** All 6 tests passing (Status: Code Remediation PASSED, Local Verification PASSED).
 
-1. **Remediation Steps Required Before Production Deployment:**
-   - [ ] Patch `LeadController@destroy`: Add `$user->canAccessLead($lead)` check.
-   - [ ] Patch `LeadController@restore`: Add `$user->canAccessLead($lead)` check.
-   - [ ] Patch `LeadController@assign`: Add `$user->canAccessLead($lead)` check.
-   - [ ] Update `LeadController@store`: Validate `service_interest` against `$user->getEffectiveAllowedCategories()`.
-   - [ ] Add `PermissionAuditLog::record()` in `EmployeeController@update` for role/team modifications.
-   - [ ] Create a migration or add a deployment runbook step ensuring `PermissionsSeeder` is executed automatically during `php artisan migrate`.
-2. **Post-Remediation Verification:**
-   - Rerun `php artisan test`.
-   - Once all high-severity findings are resolved, the system will achieve full Production-Ready certification.
+### 10.2 SEC-02: Permission Catalog Initialization & User Mapping Safety
+- **Original Finding:** `2026_11_12_000000_create_permission_management_tables.php` created empty tables, leaving production unusable after `migrate` unless `PermissionsSeeder` was manually executed. Additionally, rerun of seeder wiped out role customizations via `sync()`.
+- **Root Cause:** Data seeding was decoupled from schema migrations, and user mapping risk existed if unmapped employees were blindly forced into `sales_executive`.
+- **Remediation:**
+  - Created version-controlled data migration `database/migrations/2026_11_13_000001_seed_baseline_roles_and_permissions.php`.
+  - Seeded 14 baseline permissions, 2 baseline teams, and 4 baseline system roles idempotently using `firstOrCreate`.
+  - System roles only attach baseline permissions and visibility scopes if no permissions/scopes are currently configured, preserving all custom administrator adjustments.
+  - User mapping strictly updates users where `role_id IS NULL`:
+    - Verified admin -> `admin`
+    - Verified sales manager (`sales.manager@vistaboundintegrated.com`) -> `sales_manager`
+    - Verified sales executives -> `sales_executive`
+    - Verified accounts employee (`accounts@vistaboundintegrated.com`) -> `accounts_executive`
+    - Ambiguous responsibility -> Left unmapped (`role_id = NULL`) and logged to prevent guessing.
+  - Updated `database/seeders/PermissionsSeeder.php` with non-destructive preservation logic.
+  - Migration `down()` is non-destructive to prevent data loss.
+- **Files Created/Modified:**
+  - `database/migrations/2026_11_13_000001_seed_baseline_roles_and_permissions.php` (New)
+  - `database/seeders/PermissionsSeeder.php`
+- **Regression Tests:**
+  - `test_sec02_baseline_permissions_initialize_and_custom_roles_survive`
+  - `test_sec02_ambiguous_user_responsibility_preserved_unmapped`
+- **Evidence:** Migration executed idempotently in 70ms; repeated migrate/seed runs preserve data (Status: Code Remediation PASSED, Local Verification PASSED).
+
+### 10.3 SEC-03: Category Validation on All Lead Creation Paths
+- **Original Finding:** Lead creation endpoints accepted arbitrary `service_interest` without validating against the creator's `$user->getEffectiveAllowedCategories()`.
+- **Root Cause:** Absence of vertical category validation at backend creation boundaries.
+- **Remediation:**
+  - `LeadController@store`: For category-restricted creators, missing/empty category returns HTTP 422; unauthorized category returns HTTP 403. Also validated destination `assigned_to` eligibility.
+  - `LeadImportService@processImport` & `ImportController@process`: Validated row categories against creator's `$user->isCategoryAllowed($service)`. Rows with unauthorized categories fail with clear diagnostic feedback. Target assignee activity verified.
+  - `MobileSyncController@push`: For offline `create_lead` mutations, unauthorized categories are rejected with `status: 'forbidden'`, message: `'Unauthorized category'`.
+- **Files Modified:**
+  - `app/Http/Controllers/Api/LeadController.php`
+  - `app/Http/Controllers/Api/ImportController.php`
+  - `app/Services/LeadImportService.php`
+  - `app/Http/Controllers/Api/MobileSyncController.php`
+- **Regression Tests:**
+  - `test_sec03_restricted_user_cannot_create_lead_in_unauthorized_category`
+  - `test_sec03_restricted_user_cannot_create_lead_without_category`
+  - `test_sec03_restricted_user_can_create_lead_in_authorized_category`
+  - `test_sec03_csv_import_enforces_user_category_restrictions`
+  - `test_sec03_mobile_offline_sync_push_rejects_unauthorized_category_lead`
+- **Evidence:** All 5 tests passing across API, CSV, and Mobile push (Status: Code Remediation PASSED, Local Verification PASSED).
+
+### 10.4 SEC-04: NULL Category Access Consistency
+- **Original Finding:** `Lead::scopeAccessibleBy` filtered out leads where `service_interest IS NULL` when restrictions existed, while `User::canAccessLead` bypassed category verification for NULL values via `!empty()`, allowing restricted users to view unclassified leads via direct ID (`show`).
+- **Root Cause:** Logic mismatch between SQL query scope and in-memory PHP record check.
+- **Remediation:**
+  - Established consistent policy: Category-restricted users are restricted strictly to explicitly allowed verticals. Unclassified leads (`service_interest` is NULL, empty, or whitespace) are strictly inaccessible to restricted users.
+  - `User::canAccessLead`: Calls `$this->isCategoryAllowed($lead->service_interest)`, which returns `false` if category is null/empty for restricted accounts.
+  - `Lead::scopeAccessibleBy`: Enforces `whereNotNull('service_interest')->whereRaw("TRIM(service_interest) != ''")->whereRaw("LOWER(TRIM(service_interest)) IN (...)")`.
+- **Files Modified:**
+  - `app/Models/User.php`
+  - `app/Models/Lead.php`
+- **Regression Tests:**
+  - `test_sec04_null_and_empty_category_leads_uniformly_inaccessible_to_restricted_user`
+- **Evidence:** Verified identical exclusion across query scope and direct record lookup (Status: Code Remediation PASSED, Local Verification PASSED).
+
+### 10.5 SEC-05: Employee Permission Audit Trail
+- **Original Finding:** Role and team updates executed via `EmployeeController@update` bypassed `permission_audit_logs`.
+- **Root Cause:** Audit calls were only present in `RolePermissionController`.
+- **Remediation:**
+  - `EmployeeController@store`: Wrapped in `DB::transaction()` with `PermissionAuditLog::record()` for `employee_created` capturing actor ID, target employee ID, initial role, team, and client IP.
+  - `EmployeeController@update`: Wrapped in `DB::transaction()`. Compared before/after values to log `employee_role_changed` (with old/new role and role ID) and `employee_team_changed` (with old/new team ID) with client IP.
+- **Files Modified:** `app/Http/Controllers/Api/EmployeeController.php`
+- **Regression Tests:**
+  - `test_sec05_employee_creation_and_updates_generate_immutable_audit_logs`
+- **Evidence:** Verified immutable audit log records generated with before/after state, actor, target, client IP, and rollback integrity (Status: Code Remediation PASSED, Local Verification PASSED).
+
+### 10.6 SEC-06: Category Normalization (Case & Whitespace)
+- **Original Finding:** String casing and whitespace discrepancies between PHP (`in_array`) and MySQL collations (`utf8mb4_unicode_ci`) caused inconsistent access outcomes.
+- **Root Cause:** Lack of standardized string normalization helper across data entry and validation.
+- **Remediation:**
+  - Added centralized helper `Lead::normalizeCategory(?string $category): ?string` using `mb_strtolower(trim($category), 'UTF-8')`.
+  - Added `User::isCategoryAllowed(?string $category): bool` helper.
+  - Enforced string trimming on category assignment storage in `RolePermissionController@updateUserCategories` and `Role@syncAllowedCategories`.
+  - Applied `LOWER(TRIM(service_interest))` in SQL query scopes for exact collation and whitespace parity.
+- **Files Modified:**
+  - `app/Models/Lead.php`
+  - `app/Models/User.php`
+  - `app/Models/Role.php`
+  - `app/Http/Controllers/Api/RolePermissionController.php`
+- **Regression Tests:**
+  - `test_sec06_case_insensitive_and_whitespace_category_normalization`
+- **Evidence:** Verified exact match for mixed case (`CLOUD & DEVOPS SOLUTIONS`) and whitespace padding (`  cloud & devops solutions  `) (Status: Code Remediation PASSED, Local Verification PASSED).
+
+---
+
+## 11. Security Audit Verdict & Readiness Assessment
+
+| Verification Tier | Verdict | Notes |
+|---|---|---|
+| **Code Remediation** | **PASSED** | All 6 security findings SEC-01 through SEC-06 remediated in code. |
+| **Local Verification** | **PASSED** | 69 automated tests passed (313 assertions). Web and mobile builds verified. Native Gradle debug APK assembled cleanly. |
+| **Staging Verification** | **PENDING** | Isolated staging environment deployment and migration dry-run pending authorization. |
+| **Production Authorization** | **HOLD (PENDING APPROVAL)** | Current local testing complete. Production remains strictly outside execution scope. Staging verification required prior to production release. |

@@ -180,6 +180,22 @@ class MobileSyncController extends Controller
                         continue;
                     }
 
+                    // Category validation for restricted creators (SEC-03)
+                    $allowedCats = $user->getEffectiveAllowedCategories();
+                    if ($allowedCats !== null) {
+                        $serviceInterest = $payload['service_interest'] ?? null;
+                        if (empty($serviceInterest) || trim($serviceInterest) === '' || !$user->isCategoryAllowed($serviceInterest)) {
+                            DB::rollBack();
+                            $results[] = [
+                                'uuid' => $uuid,
+                                'status' => 'forbidden',
+                                'message' => 'Unauthorized category. You are not authorized to create leads under this service vertical.',
+                                'operation' => $operation,
+                            ];
+                            continue;
+                        }
+                    }
+
                     $phoneNormalized = Lead::normalizePhone($payload['phone'] ?? '');
                     if (empty($phoneNormalized) || strlen($phoneNormalized) < 7) {
                         DB::rollBack();
@@ -190,6 +206,14 @@ class MobileSyncController extends Controller
                             'operation' => $operation,
                         ];
                         continue;
+                    }
+
+                    $assigneeId = $user->id;
+                    if ($user->isAdmin() && !empty($payload['assigned_to'])) {
+                        $targetUser = User::find($payload['assigned_to']);
+                        if ($targetUser && $targetUser->is_active) {
+                            $assigneeId = $targetUser->id;
+                        }
                     }
 
                     $newLead = Lead::create([
@@ -204,7 +228,7 @@ class MobileSyncController extends Controller
                         'additional_details' => $payload['additional_details'] ?? null,
                         'status' => $payload['status'] ?? 'new',
                         'priority' => $payload['priority'] ?? 'medium',
-                        'assigned_to' => $user->isAdmin() ? ($payload['assigned_to'] ?? $user->id) : $user->id,
+                        'assigned_to' => $assigneeId,
                         'created_by' => $user->id,
                         'version' => 1,
                     ]);

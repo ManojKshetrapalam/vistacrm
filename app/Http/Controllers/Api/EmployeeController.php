@@ -7,6 +7,7 @@ use App\Models\DeviceToken;
 use App\Models\FollowUp;
 use App\Models\Lead;
 use App\Models\LeadActivity;
+use App\Models\PermissionAuditLog;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -96,22 +97,39 @@ class EmployeeController extends Controller
             $roleId = $roleModel?->id;
         }
 
-        $employee = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'] ?? null,
-            'password' => Hash::make($validated['password']),
-            'role' => $roleString,
-            'role_id' => $roleId,
-            'team_id' => $validated['team_id'] ?? null,
-            'is_active' => true,
-            'notification_preferences' => [
-                'whatsapp_enabled' => true,
-                'email_enabled' => true,
-                'in_app_enabled' => true,
-                'phone_for_notifications' => $validated['phone'] ?? null,
-            ],
-        ]);
+        $employee = DB::transaction(function () use ($validated, $user, $roleString, $roleId, $request) {
+            $emp = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'password' => Hash::make($validated['password']),
+                'role' => $roleString,
+                'role_id' => $roleId,
+                'team_id' => $validated['team_id'] ?? null,
+                'is_active' => true,
+                'notification_preferences' => [
+                    'whatsapp_enabled' => true,
+                    'email_enabled' => true,
+                    'in_app_enabled' => true,
+                    'phone_for_notifications' => $validated['phone'] ?? null,
+                ],
+            ]);
+
+            PermissionAuditLog::record(
+                $user->id,
+                'user',
+                $emp->id,
+                'employee_created',
+                [
+                    'role' => $emp->role,
+                    'role_id' => $emp->role_id,
+                    'team_id' => $emp->team_id,
+                ],
+                $request->ip()
+            );
+
+            return $emp;
+        });
 
         return response()->json([
             'message' => 'Employee account created successfully',
@@ -137,47 +155,92 @@ class EmployeeController extends Controller
             'is_active' => 'sometimes|required|boolean',
         ]);
 
-        if (!empty($validated['name'])) {
-            $user->name = $validated['name'];
-        }
-        if (!empty($validated['email'])) {
-            $user->email = $validated['email'];
-        }
-        if (array_key_exists('phone', $validated)) {
-            $user->phone = $validated['phone'];
-        }
-        if (!empty($validated['password'])) {
-            $user->password = Hash::make($validated['password']);
+        if (isset($validated['is_active']) && $user->id === $currentUser->id && !$validated['is_active']) {
+            return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
         }
 
+        $oldRoleId = $user->role_id;
+        $oldRole = $user->role;
+        $oldTeamId = $user->team_id;
+
+        $newRoleId = $oldRoleId;
+        $newRole = $oldRole;
         if (array_key_exists('role_id', $validated)) {
-            $user->role_id = $validated['role_id'];
+            $newRoleId = $validated['role_id'];
             if ($validated['role_id']) {
                 $roleModel = \App\Models\Role::find($validated['role_id']);
                 if ($roleModel) {
-                    $user->role = $roleModel->name === 'admin' ? 'admin' : 'employee';
+                    $newRole = $roleModel->name === 'admin' ? 'admin' : 'employee';
                 }
             }
         } elseif (!empty($validated['role'])) {
-            $user->role = $validated['role'];
+            $newRole = $validated['role'];
             $roleModel = \App\Models\Role::where('name', $validated['role'])->first();
             if ($roleModel) {
-                $user->role_id = $roleModel->id;
+                $newRoleId = $roleModel->id;
             }
         }
 
-        if (array_key_exists('team_id', $validated)) {
-            $user->team_id = $validated['team_id'];
-        }
+        $newTeamId = array_key_exists('team_id', $validated) ? $validated['team_id'] : $oldTeamId;
 
-        if (isset($validated['is_active'])) {
-            if ($user->id === $currentUser->id && !$validated['is_active']) {
-                return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
+        DB::transaction(function () use (
+            $user, $validated, $currentUser, $request,
+            $oldRoleId, $newRoleId, $oldRole, $newRole, $oldTeamId, $newTeamId
+        ) {
+            if (!empty($validated['name'])) {
+                $user->name = $validated['name'];
             }
-            $user->is_active = $validated['is_active'];
-        }
+            if (!empty($validated['email'])) {
+                $user->email = $validated['email'];
+            }
+            if (array_key_exists('phone', $validated)) {
+                $user->phone = $validated['phone'];
+            }
+            if (!empty($validated['password'])) {
+                $user->password = Hash::make($validated['password']);
+            }
 
-        $user->save();
+            $user->role_id = $newRoleId;
+            $user->role = $newRole;
+            $user->team_id = $newTeamId;
+
+            if (isset($validated['is_active'])) {
+                $user->is_active = $validated['is_active'];
+            }
+
+            $user->save();
+
+            // Record audit logs for actual changes (SEC-05)
+            if ($newRoleId != $oldRoleId || $newRole !== $oldRole) {
+                PermissionAuditLog::record(
+                    $currentUser->id,
+                    'user',
+                    $user->id,
+                    'employee_role_changed',
+                    [
+                        'old_role' => $oldRole,
+                        'new_role' => $newRole,
+                        'old_role_id' => $oldRoleId,
+                        'new_role_id' => $newRoleId,
+                    ],
+                    $request->ip()
+                );
+            }
+
+            if ($newTeamId != $oldTeamId) {
+                PermissionAuditLog::record(
+                    $currentUser->id,
+                    'user',
+                    $user->id,
+                    'employee_team_changed',
+                    [
+                        'old_team_id' => $oldTeamId,
+                        'new_team_id' => $newTeamId,
+                    ],
+                    $request->ip()
+                );
+            }
+        });
 
         return response()->json([
             'message' => 'Employee updated successfully',

@@ -146,6 +146,24 @@ class LeadController extends Controller
             'confirm_duplicate' => 'nullable|boolean',
         ]);
 
+        // Category validation for restricted creators (SEC-03)
+        $allowedCats = $user->getEffectiveAllowedCategories();
+        if ($allowedCats !== null) {
+            $serviceInterest = $validated['service_interest'] ?? null;
+            if (empty($serviceInterest) || trim($serviceInterest) === '') {
+                return response()->json([
+                    'message' => 'A service vertical category is required and must be within your authorized categories.',
+                    'errors' => ['service_interest' => ['Service category is required for restricted users.']],
+                ], 422);
+            }
+            if (!$user->isCategoryAllowed($serviceInterest)) {
+                return response()->json([
+                    'message' => 'You are not authorized to create leads under this service vertical.',
+                    'errors' => ['service_interest' => ['Selected category is not in your authorized list.']],
+                ], 403);
+            }
+        }
+
         $normalizedPhone = Lead::normalizePhone($validated['phone']);
         if (empty($normalizedPhone) || strlen($normalizedPhone) < 7) {
             return response()->json([
@@ -178,6 +196,14 @@ class LeadController extends Controller
             $assigneeId = $validated['assigned_to'] ?? null;
         } else {
             $assigneeId = $user->id;
+        }
+
+        // Validate destination assignee if assigned (SEC-01)
+        if ($assigneeId) {
+            $assigneeError = $this->validateAssignee($user, $assigneeId, $validated['service_interest'] ?? null);
+            if ($assigneeError) {
+                return $assigneeError;
+            }
         }
 
         $status = $validated['status'] ?? ($assigneeId ? 'assigned' : 'new');
@@ -357,7 +383,13 @@ class LeadController extends Controller
         if (array_key_exists('source', $validated)) {
             $lead->source = $validated['source'];
         }
-        if (array_key_exists('service_interest', $validated)) {
+        if (array_key_exists('service_interest', $validated) && $validated['service_interest'] !== $lead->service_interest) {
+            if (!$user->isCategoryAllowed($validated['service_interest'])) {
+                return response()->json([
+                    'message' => 'You are not authorized to assign this lead to the requested service vertical.',
+                    'errors' => ['service_interest' => ['Selected category is not in your authorized list.']],
+                ], 403);
+            }
             $lead->service_interest = $validated['service_interest'];
         }
         if (array_key_exists('additional_details', $validated)) {
@@ -385,6 +417,11 @@ class LeadController extends Controller
 
         // Assignment change (Authorized assigners only)
         if (($user->isAdmin() || $user->hasPermission('leads.assign')) && array_key_exists('assigned_to', $validated) && $validated['assigned_to'] != $oldAssignee) {
+            $assigneeError = $this->validateAssignee($user, $validated['assigned_to'], $lead->service_interest);
+            if ($assigneeError) {
+                return $assigneeError;
+            }
+
             $lead->assigned_to = $validated['assigned_to'];
             $newAssignee = $lead->assigned_to ? User::find($lead->assigned_to) : null;
             $assigneeName = $newAssignee ? $newAssignee->name : 'Unassigned';
@@ -439,9 +476,18 @@ class LeadController extends Controller
             return response()->json(['message' => 'Only administrators or authorized users can reassign leads.'], 403);
         }
 
+        if (!$user->canAccessLead($lead)) {
+            return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
+        }
+
         $validated = $request->validate([
             'assigned_to' => 'nullable|exists:users,id',
         ]);
+
+        $assigneeError = $this->validateAssignee($user, $validated['assigned_to'] ?? null, $lead->service_interest);
+        if ($assigneeError) {
+            return $assigneeError;
+        }
 
         $oldAssignee = $lead->assigned_to;
         $lead->assigned_to = $validated['assigned_to'];
@@ -671,6 +717,10 @@ class LeadController extends Controller
             return response()->json(['message' => 'Unauthorized. Only administrators or authorized users can archive leads.'], 403);
         }
 
+        if (!$user->canAccessLead($lead)) {
+            return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
+        }
+
         // Cancel any pending follow-up reminders
         FollowUp::where('lead_id', $lead->id)
             ->where('status', 'pending')
@@ -704,6 +754,11 @@ class LeadController extends Controller
         }
 
         $lead = Lead::onlyTrashed()->findOrFail($id);
+
+        if (!$user->canAccessLead($lead)) {
+            return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
+        }
+
         $lead->restore();
 
         LeadActivity::create([
@@ -735,6 +790,10 @@ class LeadController extends Controller
 
         $lead = Lead::onlyTrashed()->findOrFail($id);
 
+        if (!$user->canAccessLead($lead)) {
+            return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
+        }
+
         $refId = $lead->reference_id;
         $name = $lead->name;
 
@@ -749,5 +808,47 @@ class LeadController extends Controller
             'message' => "Lead {$refId} ({$name}) has been permanently deleted.",
             'deleted_id' => $id,
         ]);
+    }
+
+    /**
+     * Validate destination employee authorization, activity, team scope, and category eligibility.
+     */
+    protected function validateAssignee(User $actor, ?int $targetUserId, ?string $serviceInterest): ?JsonResponse
+    {
+        if ($targetUserId === null) {
+            return null;
+        }
+
+        $targetUser = User::find($targetUserId);
+        if (!$targetUser || !$targetUser->is_active) {
+            return response()->json([
+                'message' => 'Cannot assign leads to an inactive user.',
+                'errors' => ['assigned_to' => ['Selected user is inactive.']],
+            ], 422);
+        }
+
+        if (!$actor->isAdmin()) {
+            $actingScope = $actor->getEffectiveVisibilityScope();
+            if ($actingScope === 'team_only' && !in_array($targetUser->id, $actor->teamMemberIds())) {
+                return response()->json([
+                    'message' => 'You can only assign leads to members of your team.',
+                    'errors' => ['assigned_to' => ['Selected user is not in your team.']],
+                ], 422);
+            } elseif ($actingScope === 'assigned_only' && $targetUser->id !== $actor->id) {
+                return response()->json([
+                    'message' => 'You can only assign leads to yourself.',
+                    'errors' => ['assigned_to' => ['Cannot assign leads to other users under your current scope.']],
+                ], 422);
+            }
+        }
+
+        if (!empty($serviceInterest) && !$targetUser->isCategoryAllowed($serviceInterest)) {
+            return response()->json([
+                'message' => 'Destination user is not authorized to handle this lead\'s service category.',
+                'errors' => ['assigned_to' => ['Selected user does not have permission for this lead\'s category.']],
+            ], 422);
+        }
+
+        return null;
     }
 }

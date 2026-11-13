@@ -57,6 +57,7 @@ class Role extends Model
 
     public function syncAllowedCategories(array $categories): void
     {
+        $cleaned = array_values(array_unique(array_filter(array_map('trim', $categories))));
         DB::table('role_category_assignments')->where('role_id', $this->id)->delete();
         $inserts = array_map(function ($cat) {
             return [
@@ -65,7 +66,7 @@ class Role extends Model
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
-        }, $categories);
+        }, $cleaned);
 
         if (!empty($inserts)) {
             DB::table('role_category_assignments')->insert($inserts);

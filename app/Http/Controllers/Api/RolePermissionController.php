@@ -451,9 +451,12 @@ class RolePermissionController extends Controller
             'allowed_categories.*' => 'string',
         ]);
 
+        $rawCategories = $validated['allowed_categories'] ?? [];
+        $cleanCategories = array_values(array_unique(array_filter(array_map('trim', $rawCategories))));
+
         DB::table('user_category_assignments')->where('user_id', $targetUser->id)->delete();
 
-        if (!empty($validated['allowed_categories'])) {
+        if (!empty($cleanCategories)) {
             $rows = array_map(function ($cat) use ($targetUser) {
                 return [
                     'user_id' => $targetUser->id,
@@ -462,7 +465,7 @@ class RolePermissionController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
-            }, $validated['allowed_categories']);
+            }, $cleanCategories);
 
             DB::table('user_category_assignments')->insert($rows);
         }
@@ -472,7 +475,7 @@ class RolePermissionController extends Controller
             'user',
             $targetUser->id,
             'category_assignments_updated',
-            ['allowed_categories' => $validated['allowed_categories'] ?? []]
+            ['allowed_categories' => $cleanCategories]
         );
 
         return response()->json([

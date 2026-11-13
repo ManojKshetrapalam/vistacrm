@@ -66,9 +66,13 @@ class PermissionsSeeder extends Seeder
                 'is_system' => true,
             ]
         );
-        $adminRole->setVisibilityScope('all');
-        $allPermIds = Permission::pluck('id')->toArray();
-        $adminRole->permissions()->sync($allPermIds);
+        if (empty(DB::table('role_visibility_scopes')->where('role_id', $adminRole->id)->value('scope'))) {
+            $adminRole->setVisibilityScope('all');
+        }
+        if (DB::table('role_has_permissions')->where('role_id', $adminRole->id)->count() === 0) {
+            $allPermIds = Permission::pluck('id')->toArray();
+            $adminRole->permissions()->attach($allPermIds);
+        }
 
         // B. Sales Manager Role
         $managerRole = Role::firstOrCreate(
@@ -79,17 +83,21 @@ class PermissionsSeeder extends Seeder
                 'is_system' => true,
             ]
         );
-        $managerRole->setVisibilityScope('team_only');
-        $managerPerms = Permission::whereIn('name', [
-            'leads.view',
-            'leads.create',
-            'leads.edit',
-            'leads.assign',
-            'leads.export',
-            'follow_ups.manage',
-            'whatsapp.send',
-        ])->pluck('id')->toArray();
-        $managerRole->permissions()->sync($managerPerms);
+        if (empty(DB::table('role_visibility_scopes')->where('role_id', $managerRole->id)->value('scope'))) {
+            $managerRole->setVisibilityScope('team_only');
+        }
+        if (DB::table('role_has_permissions')->where('role_id', $managerRole->id)->count() === 0) {
+            $managerPerms = Permission::whereIn('name', [
+                'leads.view',
+                'leads.create',
+                'leads.edit',
+                'leads.assign',
+                'leads.export',
+                'follow_ups.manage',
+                'whatsapp.send',
+            ])->pluck('id')->toArray();
+            $managerRole->permissions()->attach($managerPerms);
+        }
 
         // C. Sales Executive Role
         $executiveRole = Role::firstOrCreate(
@@ -100,15 +108,19 @@ class PermissionsSeeder extends Seeder
                 'is_system' => true,
             ]
         );
-        $executiveRole->setVisibilityScope('assigned_only');
-        $execPerms = Permission::whereIn('name', [
-            'leads.view',
-            'leads.create',
-            'leads.edit',
-            'follow_ups.manage',
-            'whatsapp.send',
-        ])->pluck('id')->toArray();
-        $executiveRole->permissions()->sync($execPerms);
+        if (empty(DB::table('role_visibility_scopes')->where('role_id', $executiveRole->id)->value('scope'))) {
+            $executiveRole->setVisibilityScope('assigned_only');
+        }
+        if (DB::table('role_has_permissions')->where('role_id', $executiveRole->id)->count() === 0) {
+            $execPerms = Permission::whereIn('name', [
+                'leads.view',
+                'leads.create',
+                'leads.edit',
+                'follow_ups.manage',
+                'whatsapp.send',
+            ])->pluck('id')->toArray();
+            $executiveRole->permissions()->attach($execPerms);
+        }
 
         // D. Accounts Executive Role
         $accountsRole = Role::firstOrCreate(
@@ -119,13 +131,17 @@ class PermissionsSeeder extends Seeder
                 'is_system' => true,
             ]
         );
-        $accountsRole->setVisibilityScope('assigned_only');
-        $accountsPerms = Permission::whereIn('name', [
-            'leads.view',
-            'leads.edit',
-            'follow_ups.manage',
-        ])->pluck('id')->toArray();
-        $accountsRole->permissions()->sync($accountsPerms);
+        if (empty(DB::table('role_visibility_scopes')->where('role_id', $accountsRole->id)->value('scope'))) {
+            $accountsRole->setVisibilityScope('assigned_only');
+        }
+        if (DB::table('role_has_permissions')->where('role_id', $accountsRole->id)->count() === 0) {
+            $accountsPerms = Permission::whereIn('name', [
+                'leads.view',
+                'leads.edit',
+                'follow_ups.manage',
+            ])->pluck('id')->toArray();
+            $accountsRole->permissions()->attach($accountsPerms);
+        }
 
         // 4. Attach Roles and Teams to Seeded Users
         $adminUser = User::where('email', 'admin@vistaboundintegrated.com')->first();

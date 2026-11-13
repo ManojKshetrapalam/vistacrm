@@ -80,4 +80,70 @@ class LeadImportWorkflowTest extends TestCase
         // Clean up temp file
         @unlink($tempPath);
     }
+
+    public function test_csv_import_enforces_user_category_restrictions(): void
+    {
+        $employee = User::where('email', 'ananya@vistaboundintegrated.com')->firstOrFail();
+
+        // Grant employee leads.import permission
+        $perm = \App\Models\Permission::where('name', 'leads.import')->firstOrFail();
+        \Illuminate\Support\Facades\DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $employee->id, 'permission_id' => $perm->id],
+            ['effect' => 'allow', 'granted_by' => 1, 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        // Restrict employee to only 'Cloud & DevOps Solutions'
+        \Illuminate\Support\Facades\DB::table('user_category_assignments')->where('user_id', $employee->id)->delete();
+        \Illuminate\Support\Facades\DB::table('user_category_assignments')->insert([
+            'user_id' => $employee->id,
+            'category_name' => 'Cloud & DevOps Solutions',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $token = $employee->createToken('emp-import-test')->plainTextToken;
+
+        $uniqueNum = rand(100000, 999999);
+        $csvContent = "Full Name,Mobile Number,Requirement\n" .
+            "Allowed Lead,+91 9150{$uniqueNum},Cloud & DevOps Solutions\n" .
+            "Forbidden Lead,+91 9250{$uniqueNum},Enterprise Software Engineering\n";
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_cat_import_') . '.csv';
+        file_put_contents($tempPath, $csvContent);
+
+        $uploadedFile = new UploadedFile($tempPath, 'cat_test.csv', 'text/csv', null, true);
+
+        $previewResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->post('/api/import/upload-preview', ['file' => $uploadedFile]);
+        $previewResponse->assertStatus(200);
+
+        $fileToken = $previewResponse->json('file_token');
+        $mapping = [
+            'name' => 'Full Name',
+            'phone' => 'Mobile Number',
+            'service_interest' => 'Requirement',
+        ];
+
+        $processResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/import/process', [
+                'file_token' => $fileToken,
+                'mapping' => $mapping,
+                'skip_duplicates' => true,
+                'assignment_mode' => 'unassigned',
+            ]);
+
+        $processResponse->assertStatus(200);
+        $report = $processResponse->json('report');
+
+        // Allowed row succeeds (1), forbidden row fails (1)
+        $this->assertEquals(1, $report['imported_count']);
+        $this->assertEquals(1, $report['invalid_count']);
+        $this->assertStringContainsString('Unauthorized category', $report['failed_rows'][0]['reason']);
+
+        // Clean up
+        \Illuminate\Support\Facades\DB::table('user_category_assignments')->where('user_id', $employee->id)->delete();
+        \Illuminate\Support\Facades\DB::table('user_has_permissions')->where('user_id', $employee->id)->where('permission_id', $perm->id)->delete();
+        @unlink($tempPath);
+    }
 }

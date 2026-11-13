@@ -3,6 +3,7 @@ import { Network } from '@capacitor/network';
 import api from '../api/axios';
 import { offlineStorage, Mutation } from './offlineStorage';
 import { localNotificationService } from './localNotifications';
+import { useAuthStore } from '../stores/auth';
 
 export const isOnline = ref<boolean>(navigator.onLine);
 export const isSyncing = ref<boolean>(false);
@@ -198,7 +199,19 @@ export const syncEngine = {
       const pullRes = await api.get(pullUrl);
 
       if (pullRes.data) {
-        const { leads, follow_ups, settings, server_time } = pullRes.data;
+        const { leads, follow_ups, settings, server_time, user, deleted_lead_ids } = pullRes.data;
+
+        // Refresh effective permissions directly from backend authority
+        if (user) {
+          try {
+            const authStore = useAuthStore();
+            authStore.user = { ...authStore.user, ...user };
+            localStorage.setItem('vb_crm_user', JSON.stringify(authStore.user));
+          } catch {
+            const existing = JSON.parse(localStorage.getItem('vb_crm_user') || '{}');
+            localStorage.setItem('vb_crm_user', JSON.stringify({ ...existing, ...user }));
+          }
+        }
 
         if (leads && leads.length > 0) {
           const cachedLeads = await offlineStorage.getLeads();
@@ -208,8 +221,24 @@ export const syncEngine = {
             leadMap.set(serverLead.id, serverLead);
           }
 
+          if (deleted_lead_ids && Array.isArray(deleted_lead_ids)) {
+            for (const id of deleted_lead_ids) {
+              leadMap.delete(id);
+            }
+          }
+
           await offlineStorage.setLeads(Array.from(leadMap.values()));
           pulledCount += leads.length;
+        } else if (deleted_lead_ids && Array.isArray(deleted_lead_ids) && deleted_lead_ids.length > 0) {
+          const cachedLeads = await offlineStorage.getLeads();
+          const filtered = cachedLeads.filter(l => !deleted_lead_ids.includes(l.id));
+          await offlineStorage.setLeads(filtered);
+        }
+
+        if (deleted_lead_ids && Array.isArray(deleted_lead_ids) && deleted_lead_ids.length > 0) {
+          for (const id of deleted_lead_ids) {
+            await localNotificationService.cancelReminder(id);
+          }
         }
 
         if (follow_ups && follow_ups.length > 0) {

@@ -102,7 +102,7 @@
             </span>
           </router-link>
 
-          <div v-if="authStore.can('leads.import') || authStore.can('employees.manage') || authStore.can('roles.manage')" class="pt-4 pb-1 px-3">
+          <div v-if="authStore.can('leads.import') || authStore.can('employees.manage') || (!isNative && authStore.can('roles.manage'))" class="pt-4 pb-1 px-3">
             <span class="text-[10px] font-bold uppercase tracking-widest text-vb-muted/70">Administration</span>
           </div>
 
@@ -129,7 +129,7 @@
           </router-link>
 
           <router-link
-            v-if="authStore.can('roles.manage')"
+            v-if="!isNative && authStore.can('roles.manage')"
             to="/roles"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/roles') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -277,6 +277,9 @@
 <script setup lang="ts">
 import vistaboundLogo from '@/assets/vistabound-logo.png';
 import { ref, computed, onMounted } from 'vue';
+import { Capacitor } from '@capacitor/core';
+
+const isNative = Capacitor.isNativePlatform();
 
 const logoUrl = computed(() => {
   if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {

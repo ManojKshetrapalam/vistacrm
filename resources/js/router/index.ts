@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
 import { useAuthStore } from '../stores/auth';
 
 import LoginView from '../views/LoginView.vue';
@@ -123,6 +124,11 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiredPermission && !authStore.can(to.meta.requiredPermission as string)) {
+    return next({ name: 'dashboard' });
+  }
+
+  // Web-only administration routes must never be accessed on native mobile platforms
+  if (to.name === 'roles-permissions' && Capacitor.isNativePlatform()) {
     return next({ name: 'dashboard' });
   }
 

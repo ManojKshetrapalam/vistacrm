@@ -381,6 +381,58 @@ All security verification and regression tests passed:
 | Verification Tier | Verdict | Notes |
 |---|---|---|
 | **Code Remediation** | **PASSED** | All 6 security findings SEC-01 through SEC-06 remediated in code. |
-| **Local Verification** | **PASSED** | 69 automated tests passed (313 assertions). Web and mobile builds verified. Native Gradle debug APK assembled cleanly. |
+| **Local Verification** | **PASSED** | 73 automated tests passed (353 assertions). Web and mobile builds verified. Native Gradle debug APK assembled cleanly. |
 | **Staging Verification** | **PENDING** | Isolated staging environment deployment and migration dry-run pending authorization. |
 | **Production Authorization** | **HOLD (PENDING APPROVAL)** | Current local testing complete. Production remains strictly outside execution scope. Staging verification required prior to production release. |
+
+---
+
+## 12. Web-Only RBAC Architecture Verification & Gap Closure (Phase G.2.1)
+
+### 12.1 Objective & Architecture Confirmation
+Following the remediation of SEC-01 through SEC-06, Phase G.2.1 verified and certified the architectural mandate:
+- **Web-Only RBAC Administration:** Role management, individual overrides, visibility scope assignments, category access controls, and permission audit logs are exclusively administered on the web desk.
+- **Shared Authoritative Backend Authorization:** Laravel serves as the single source of truth for all authorization checks across web and mobile requests.
+- **Permission-Aware Android Application:** The native Android application consumes backend-calculated effective permissions to adapt UI elements and local behaviors, without duplicating any permission inheritance or override logic locally.
+- **Strict Android Administration Exclusion:** Native mobile clients cannot access or render administrative RBAC screens or workflows.
+
+### 12.2 Verification & Implementation Gap Closure
+
+#### 1. Web RBAC Administration Verification
+- **Verified Capabilities:** Authorized administrators on the web interface can create and edit roles, configure role permissions, set granular user overrides (Inherit / Allow / Deny), configure lead visibility scopes (`assigned_only`, `team_only`, `all`), set category restrictions, and view immutable audit trails (`permission_audit_logs`).
+- **Backend API Protection:** All RBAC endpoints (`/api/roles`, `/api/permissions`, `/api/users/{id}/permissions`, `/api/users/{id}/visibility`, `/api/users/{id}/categories`, `/api/users/{id}/permissions/reset`, `/api/audit-logs`) strictly enforce `$user->isAdmin() || $user->hasPermission('roles.manage')`. Direct API attempts by unauthorized users or mobile tokens receive HTTP 403 Forbidden.
+
+#### 2. Android RBAC Administration Exclusion
+- **Navigation Guard:** `resources/js/router/index.ts` intercepts navigation to `roles-permissions` and redirects to `/dashboard` when running on a native platform (`Capacitor.isNativePlatform()`).
+- **Sidebar Navigation:** `resources/js/components/AppLayout.vue` excludes the "Roles & Permissions" link when `Capacitor.isNativePlatform()` is true.
+- **Employee Actions Menu:** `resources/js/views/EmployeesView.vue` excludes "Configure Permissions" from employee action menus when running on native platforms.
+- **View Mount Guard:** `resources/js/views/RolesPermissionsView.vue` redirects immediately to `/dashboard` upon `onMounted` if executed inside a native container.
+
+#### 3. Authoritative Backend Single Source of Truth
+- **Calculated Payloads:** The Android app receives pre-calculated effective permissions from `/api/auth/login`, `/api/auth/me`, and `/api/mobile/sync/pull`.
+- **Zero Local Inheritance Logic:** Pinia `authStore.can(permission)` simply checks `user.permissions.includes(permission)` (or admin role bypass). No inheritance, override resolution, or hierarchy calculations exist on the mobile client.
+
+#### 4. Permission-Aware Mobile UI & Category Enforcement
+- **Category-Restricted UI:** `resources/js/views/LeadCreateView.vue` computes `displayCategories` based on `authStore.user.allowed_categories`. Restricted employees are presented solely with their authorized categories in the creation dropdown.
+- **Backend Category Guard:** Direct API calls or offline sync pushes with unauthorized categories are rejected with HTTP 403 / HTTP 422.
+- **Action Elements:** Add Lead, Export, Archive, Restore, Force Delete, Reassign, and WhatsApp triggers are conditionally displayed in `LeadsListView.vue`, `LeadDetailView.vue`, and `AppLayout.vue` based on backend-verified permissions.
+
+#### 5. Dynamic Permission Refresh & Stale Cache Immunity
+- **Sync Pull Permission Update:** `resources/js/services/syncEngine.ts` extracts `pullRes.data.user` during two-way synchronization and updates `authStore.user` and persistent local storage (`vb_crm_user`), ensuring that role or override changes on the web take effect on Android on the next sync cycle.
+- **Deleted Lead Purge & Alarm Cancellation:** `syncEngine.ts` processes `deleted_lead_ids` from `/api/mobile/sync/pull`, purging soft-deleted/archived leads from offline storage and cancelling pending local notification alarms (`localNotificationService.cancelReminder(id)`), adhering to AGENTS.md Invariant 7.
+- **Backend Dynamic Verification:** Sanctum tokens do not store stale claims; every request dynamically resolves user permissions through the database. Even if a client possesses a stale token or tampered UI, unauthorized actions are rejected with HTTP 403.
+
+### 12.3 Phase G.2.1 Automated Test Evidence
+
+Four dedicated regression and architecture tests added to `tests/Feature/PermissionManagementTest.php`:
+1. `test_phase_g21_web_only_rbac_endpoints_strictly_forbid_non_admin`: Confirms HTTP 403 on GET/POST/PUT/DELETE for `/api/roles`, `/api/permissions`, `/api/users/{id}/*`, and `/api/audit-logs`.
+2. `test_phase_g21_mobile_sync_pull_returns_authoritative_effective_permissions_and_refreshes`: Confirms `/api/mobile/sync/pull` delivers calculated effective permissions and dynamically updates when permissions are granted or revoked on web.
+3. `test_phase_g21_backend_enforces_live_permission_dynamically_against_stale_token`: Verifies that a client holding an active token is immediately rejected with HTTP 403 when an admin revokes permissions on web.
+4. `test_phase_g21_category_restricted_lead_creation_enforcement`: Verifies HTTP 403 rejection on prohibited category creation and HTTP 201 on authorized category creation.
+
+### 12.4 Verification Suite Results
+- **PHPUnit Test Suite:** 73 passed, 0 failed, 353 assertions across 8 test suites (`php artisan test`).
+- **Web Production Build:** Vite v6.4.5 built in 22.80s (`npm run build`).
+- **Mobile Production Build:** Vite v6.4.5 mobile bundle built in 21.04s (`npm run build:mobile`).
+- **Capacitor Android Sync:** 7 plugins synchronized cleanly in 0.35s (`npx cap sync android`).
+- **Native Android APK Build:** Gradle assembleDebug completed with `BUILD SUCCESSFUL in 1m 5s` (307 actionable tasks).

@@ -440,6 +440,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
 import AppLayout from '../components/AppLayout.vue';
@@ -713,7 +714,7 @@ const getEmployeeActions = (emp: any): ActionMenuItem[] => {
     },
   ];
 
-  if (authStore.can('roles.manage')) {
+  if (!Capacitor.isNativePlatform() && authStore.can('roles.manage')) {
     actions.push({
       label: 'Configure Permissions',
       icon: ShieldCheck,

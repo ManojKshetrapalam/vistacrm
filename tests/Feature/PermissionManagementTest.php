@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class PermissionManagementTest extends TestCase
@@ -918,5 +919,228 @@ class PermissionManagementTest extends TestCase
         // Clean up
         DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
         $leadNorm->forceDelete();
+    }
+
+    /**
+     * Phase G.2.1 Architecture Verification Tests: Web-Only RBAC & Mobile Authority
+     */
+    public function test_phase_g21_web_only_rbac_endpoints_strictly_forbid_non_admin(): void
+    {
+        $employeeToken = $this->employee1->createToken('test_mobile_session')->plainTextToken;
+
+        // 1. Role listing and management
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->getJson('/api/roles')
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->postJson('/api/roles', [
+                'name' => 'malicious_role',
+                'display_name' => 'Malicious Role',
+            ])
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->putJson('/api/roles/1', [
+                'display_name' => 'Tampered Role',
+            ])
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->deleteJson('/api/roles/1')
+            ->assertStatus(403);
+
+        // 2. Permission catalog listing
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->getJson('/api/permissions')
+            ->assertStatus(403);
+
+        // 3. User-level overrides on other users
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->getJson("/api/users/{$this->employee2->id}/permissions")
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->putJson("/api/users/{$this->employee2->id}/permissions", [
+                'overrides' => [['permission_id' => 1, 'state' => 'allow']],
+            ])
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->putJson("/api/users/{$this->employee2->id}/visibility", [
+                'visibility_scope' => 'all',
+            ])
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->putJson("/api/users/{$this->employee2->id}/categories", [
+                'categories' => ['All Categories'],
+            ])
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->postJson("/api/users/{$this->employee2->id}/permissions/reset")
+            ->assertStatus(403);
+
+        // 4. Permission Audit Logs
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->getJson('/api/audit-logs')
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer ' . $employeeToken)
+            ->getJson('/api/permissions/audit-logs')
+            ->assertStatus(403);
+    }
+
+    public function test_phase_g21_mobile_sync_pull_returns_authoritative_effective_permissions_and_refreshes(): void
+    {
+        // 1. Initial mobile pull - should NOT have leads.export by default
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+        $this->employee1->refresh();
+
+        Sanctum::actingAs($this->employee1);
+        $initialPull = $this->getJson('/api/mobile/sync/pull');
+
+        $initialPull->assertStatus(200);
+        $initialPull->assertJsonStructure([
+            'server_time',
+            'user' => [
+                'id',
+                'name',
+                'email',
+                'role',
+                'permissions',
+                'visibility_scope',
+                'allowed_categories',
+            ],
+            'leads',
+            'follow_ups',
+            'settings',
+        ]);
+
+        $initialPerms = $initialPull->json('user.permissions');
+        $this->assertNotContains('leads.export', $initialPerms);
+
+        // 2. Admin grants explicit allow override on web
+        Sanctum::actingAs($this->admin);
+        $updateRes = $this->putJson("/api/users/{$this->employee1->id}/permissions", [
+            'overrides' => [
+                ['permission' => 'leads.export', 'effect' => 'allow'],
+            ],
+        ]);
+        $updateRes->assertStatus(200);
+
+        // 3. Mobile pulls sync again - effective permissions immediately include leads.export
+        Sanctum::actingAs($this->employee1);
+        $refreshedPull = $this->getJson('/api/mobile/sync/pull');
+
+        $refreshedPull->assertStatus(200);
+        $refreshedPerms = $refreshedPull->json('user.permissions');
+        $this->assertContains('leads.export', $refreshedPerms);
+
+        // 4. Admin revokes with explicit deny on web
+        Sanctum::actingAs($this->admin);
+        $denyRes = $this->putJson("/api/users/{$this->employee1->id}/permissions", [
+            'overrides' => [
+                ['permission' => 'leads.export', 'effect' => 'deny'],
+            ],
+        ]);
+        $denyRes->assertStatus(200);
+
+        // 5. Mobile pulls sync again - effective permissions immediately exclude leads.export
+        Sanctum::actingAs($this->employee1);
+        $deniedPull = $this->getJson('/api/mobile/sync/pull');
+
+        $deniedPull->assertStatus(200);
+        $deniedPerms = $deniedPull->json('user.permissions');
+        $this->assertNotContains('leads.export', $deniedPerms);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+    }
+
+    public function test_phase_g21_backend_enforces_live_permission_dynamically_against_stale_token(): void
+    {
+        // 1. Admin grants explicit allow for leads.archive on web
+        Sanctum::actingAs($this->admin);
+        $this->putJson("/api/users/{$this->employee1->id}/permissions", [
+            'overrides' => [
+                ['permission' => 'leads.archive', 'effect' => 'allow'],
+            ],
+        ])->assertStatus(200);
+
+        $lead = $this->createLead('Enterprise Software Engineering', $this->employee1->id);
+
+        // 2. Employee archives lead -> succeeds
+        Sanctum::actingAs($this->employee1);
+        $archiveRes = $this->deleteJson("/api/leads/{$lead->id}");
+        $archiveRes->assertStatus(200);
+        $this->assertSoftDeleted('leads', ['id' => $lead->id]);
+
+        // Restore lead via admin
+        $lead->restore();
+
+        // 3. Admin revokes leads.archive with DENY override on web
+        Sanctum::actingAs($this->admin);
+        $this->putJson("/api/users/{$this->employee1->id}/permissions", [
+            'overrides' => [
+                ['permission' => 'leads.archive', 'effect' => 'deny'],
+            ],
+        ])->assertStatus(200);
+
+        // 4. Employee immediately re-attempts archive (stale client state)
+        Sanctum::actingAs($this->employee1);
+        $staleAttempt = $this->deleteJson("/api/leads/{$lead->id}");
+
+        // Backend must dynamically reject with 403 Forbidden!
+        $staleAttempt->assertStatus(403);
+        $this->assertDatabaseHas('leads', ['id' => $lead->id, 'deleted_at' => null]);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+        $lead->forceDelete();
+    }
+
+    public function test_phase_g21_category_restricted_lead_creation_enforcement(): void
+    {
+        // Assign only 'Cloud Infrastructure'
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        DB::table('user_category_assignments')->insert([
+            'user_id' => $this->employee1->id,
+            'category_name' => 'Cloud Infrastructure',
+            'is_allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->employee1->refresh();
+        Sanctum::actingAs($this->employee1);
+
+        // 1. Prohibited category lead creation -> 403 Forbidden
+        $disallowedRes = $this->postJson('/api/leads', [
+            'name' => 'Disallowed Category Lead',
+            'phone' => '+91 99999 88888',
+            'service_interest' => 'Retail Banking Platform',
+            'status' => 'new',
+        ]);
+
+        $disallowedRes->assertStatus(403);
+
+        // 2. Allowed category lead creation -> 201 Created
+        $allowedRes = $this->postJson('/api/leads', [
+            'name' => 'Allowed Category Lead',
+            'phone' => '+91 99999 77777',
+            'service_interest' => 'Cloud Infrastructure',
+            'status' => 'new',
+        ]);
+
+        $allowedRes->assertStatus(201);
+        $leadId = $allowedRes->json('lead.id');
+
+        // Clean up
+        DB::table('user_category_assignments')->where('user_id', $this->employee1->id)->delete();
+        if ($leadId) {
+            Lead::withTrashed()->find($leadId)?->forceDelete();
+        }
     }
 }

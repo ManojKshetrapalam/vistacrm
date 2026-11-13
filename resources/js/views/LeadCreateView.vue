@@ -117,7 +117,7 @@
               </label>
               <select v-model="form.service_interest" class="field text-sm">
                 <option value="">Select Primary Interest...</option>
-                <option v-for="cat in serviceCategories" :key="cat" :value="cat">{{ cat }}</option>
+                <option v-for="cat in displayCategories" :key="cat" :value="cat">{{ cat }}</option>
               </select>
             </div>
           </div>
@@ -217,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
@@ -231,6 +231,15 @@ const authStore = useAuthStore();
 const leadSources = ref<string[]>(['Website', 'WhatsApp Inbound', 'LinkedIn', 'Referral', 'Cold Outreach']);
 const serviceCategories = ref<string[]>([]);
 const employeesList = ref<any[]>([]);
+
+const displayCategories = computed(() => {
+  const allowed = authStore.user?.allowed_categories;
+  if (!allowed || allowed.length === 0 || authStore.isAdmin) {
+    return serviceCategories.value;
+  }
+  const allowedNorm = allowed.map((c: string) => c.toLowerCase().trim());
+  return serviceCategories.value.filter((cat: string) => allowedNorm.includes(cat.toLowerCase().trim()));
+});
 
 const submitting = ref(false);
 const errorMsg = ref('');
@@ -257,6 +266,9 @@ const fetchSettings = async () => {
     leadSources.value = res.data.lead_sources || [];
     serviceCategories.value = res.data.service_categories || [];
     employeesList.value = res.data.employees || [];
+    if (displayCategories.value.length === 1 && !form.service_interest) {
+      form.service_interest = displayCategories.value[0];
+    }
   } catch (err) {
     // quiet
   }

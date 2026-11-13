@@ -707,7 +707,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
 import api from '../api/axios';
 import AppLayout from '../components/AppLayout.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
@@ -727,6 +728,7 @@ import {
 } from 'lucide-vue-next';
 
 const route = useRoute();
+const router = useRouter();
 
 // Active tab: 'roles' | 'users' | 'audit'
 const activeTab = ref<'roles' | 'users' | 'audit'>('roles');
@@ -1102,6 +1104,11 @@ const confirmDeleteRole = async () => {
 };
 
 onMounted(async () => {
+  if (Capacitor.isNativePlatform()) {
+    router.replace({ name: 'dashboard' });
+    return;
+  }
+
   await Promise.all([fetchRoles(), fetchCategoriesAndPermissions()]);
   if (route.query.user) {
     activeTab.value = 'users';

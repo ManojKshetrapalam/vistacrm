@@ -41,14 +41,20 @@
         </div>
 
         <!-- Role Pill in Sidebar -->
-        <div class="px-5 py-3 bg-vb-cream/50 border-b border-vb-plum/5 flex items-center justify-between">
-          <div class="text-xs text-vb-muted">Role:</div>
-          <span
-            class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-            :class="authStore.isAdmin ? 'bg-vb-plum text-white' : 'bg-vb-teal/10 text-vb-teal'"
-          >
-            {{ authStore.isAdmin ? 'Administrator' : 'Solutions Desk' }}
-          </span>
+        <div class="px-5 py-3 bg-vb-cream/50 border-b border-vb-plum/5 flex flex-col gap-1">
+          <div class="flex items-center justify-between">
+            <div class="text-xs text-vb-muted">Role:</div>
+            <span
+              class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+              :class="authStore.isAdmin ? 'bg-vb-plum text-white' : 'bg-vb-teal/10 text-vb-teal'"
+            >
+              {{ authStore.user?.role_display_name || (authStore.isAdmin ? 'Administrator' : 'Solutions Desk') }}
+            </span>
+          </div>
+          <div v-if="authStore.user?.team_name" class="flex items-center justify-between text-[11px] text-vb-muted">
+            <span>Team:</span>
+            <span class="font-semibold text-vb-plum">{{ authStore.user.team_name }}</span>
+          </div>
         </div>
 
         <!-- Navigation Links -->
@@ -64,6 +70,7 @@
           </router-link>
 
           <router-link
+            v-if="authStore.can('leads.view')"
             to="/leads"
             class="flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/leads') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -76,6 +83,7 @@
           </router-link>
 
           <router-link
+            v-if="authStore.can('follow_ups.manage')"
             to="/follow-ups"
             class="flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/follow-ups') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -94,12 +102,12 @@
             </span>
           </router-link>
 
-          <div v-if="authStore.isAdmin" class="pt-4 pb-1 px-3">
+          <div v-if="authStore.can('leads.import') || authStore.can('employees.manage') || authStore.can('roles.manage')" class="pt-4 pb-1 px-3">
             <span class="text-[10px] font-bold uppercase tracking-widest text-vb-muted/70">Administration</span>
           </div>
 
           <router-link
-            v-if="authStore.isAdmin"
+            v-if="authStore.can('leads.import')"
             to="/import"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/import') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -110,7 +118,7 @@
           </router-link>
 
           <router-link
-            v-if="authStore.isAdmin"
+            v-if="authStore.can('employees.manage')"
             to="/employees"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/employees') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -118,6 +126,17 @@
           >
             <UserCheck class="w-4 h-4" />
             <span>Employee Accounts</span>
+          </router-link>
+
+          <router-link
+            v-if="authStore.can('roles.manage')"
+            to="/roles"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/roles') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            @click="mobileSidebarOpen = false"
+          >
+            <ShieldCheck class="w-4 h-4" />
+            <span>Roles & Permissions</span>
           </router-link>
 
           <div class="pt-4 pb-1 px-3">
@@ -143,7 +162,7 @@
           </router-link>
 
           <router-link
-            v-if="authStore.isAdmin"
+            v-if="authStore.can('settings.manage')"
             to="/settings"
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
             :class="isActive('/settings') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
@@ -217,6 +236,7 @@
             </div>
 
             <router-link
+              v-if="authStore.can('leads.create')"
               to="/leads/new"
               class="btn-primary text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5"
             >
@@ -288,6 +308,7 @@ import {
   CalendarClock,
   FileSpreadsheet,
   UserCheck,
+  ShieldCheck,
   BellRing,
   Settings,
   LogOut,

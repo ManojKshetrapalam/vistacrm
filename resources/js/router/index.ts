@@ -11,6 +11,7 @@ import ImportWizardView from '../views/ImportWizardView.vue';
 import EmployeesView from '../views/EmployeesView.vue';
 import NotificationsView from '../views/NotificationsView.vue';
 import SettingsView from '../views/SettingsView.vue';
+import RolesPermissionsView from '../views/RolesPermissionsView.vue';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -63,7 +64,13 @@ const routes: RouteRecordRaw[] = [
     path: '/employees',
     name: 'employees',
     component: EmployeesView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiredPermission: 'employees.manage' },
+  },
+  {
+    path: '/roles',
+    name: 'roles-permissions',
+    component: RolesPermissionsView,
+    meta: { requiresAuth: true, requiredPermission: 'roles.manage' },
   },
   {
     path: '/notifications',
@@ -112,6 +119,10 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
+  }
+
+  if (to.meta.requiredPermission && !authStore.can(to.meta.requiredPermission as string)) {
     return next({ name: 'dashboard' });
   }
 

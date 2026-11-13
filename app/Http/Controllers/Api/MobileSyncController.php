@@ -44,12 +44,23 @@ class MobileSyncController extends Controller
         // Accessible follow-ups delta
         $followUpsQuery = FollowUp::query()->with('lead:id,reference_id,name,phone,company_name,status');
         if (!$user->isAdmin()) {
-            $followUpsQuery->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->orWhereHas('lead', function ($lq) use ($user) {
-                      $lq->where('assigned_to', $user->id);
-                  });
-            });
+            $scope = $user->getEffectiveVisibilityScope();
+            if ($scope === 'team_only') {
+                $teamMemberIds = $user->teamMemberIds();
+                $followUpsQuery->where(function ($q) use ($teamMemberIds) {
+                    $q->whereIn('user_id', $teamMemberIds)
+                      ->orWhereHas('lead', function ($lq) use ($teamMemberIds) {
+                          $lq->whereIn('assigned_to', $teamMemberIds);
+                      });
+                });
+            } elseif ($scope !== 'all') {
+                $followUpsQuery->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhereHas('lead', function ($lq) use ($user) {
+                          $lq->where('assigned_to', $user->id);
+                      });
+                });
+            }
         }
 
         if ($since) {
@@ -96,6 +107,11 @@ class MobileSyncController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'role_name' => $user->roleRelation?->name ?? $user->role,
+                'role_display_name' => $user->roleRelation?->display_name ?? ucfirst($user->role),
+                'permissions' => $user->getEffectivePermissions(),
+                'visibility_scope' => $user->getEffectiveVisibilityScope(),
+                'allowed_categories' => $user->getEffectiveAllowedCategories(),
             ],
             'leads' => $leads,
             'deleted_lead_ids' => $deletedLeadIds,
@@ -153,6 +169,17 @@ class MobileSyncController extends Controller
                 DB::beginTransaction();
 
                 if ($operation === 'create_lead') {
+                    if (!$user->isAdmin() && !$user->hasPermission('leads.create')) {
+                        DB::rollBack();
+                        $results[] = [
+                            'uuid' => $uuid,
+                            'status' => 'forbidden',
+                            'message' => 'Unauthorized to create leads.',
+                            'operation' => $operation,
+                        ];
+                        continue;
+                    }
+
                     $phoneNormalized = Lead::normalizePhone($payload['phone'] ?? '');
                     if (empty($phoneNormalized) || strlen($phoneNormalized) < 7) {
                         DB::rollBack();
@@ -219,6 +246,34 @@ class MobileSyncController extends Controller
 
                 if (!isset($leadInitialVersions[$lead->id])) {
                     $leadInitialVersions[$lead->id] = $lead->version;
+                }
+
+                if ($operation === 'create_note' || $operation === 'update_status' || $operation === 'log_call') {
+                    if (!$user->isAdmin() && !$user->hasPermission('leads.edit')) {
+                        DB::rollBack();
+                        $results[] = [
+                            'uuid' => $uuid,
+                            'status' => 'forbidden',
+                            'message' => 'Unauthorized to update this lead.',
+                            'operation' => $operation,
+                            'lead_id' => $leadId,
+                        ];
+                        continue;
+                    }
+                }
+
+                if (str_contains($operation, 'followup')) {
+                    if (!$user->isAdmin() && !$user->hasPermission('follow_ups.manage')) {
+                        DB::rollBack();
+                        $results[] = [
+                            'uuid' => $uuid,
+                            'status' => 'forbidden',
+                            'message' => 'Unauthorized to manage follow-ups.',
+                            'operation' => $operation,
+                            'lead_id' => $leadId,
+                        ];
+                        continue;
+                    }
                 }
 
                 if ($operation === 'create_note') {

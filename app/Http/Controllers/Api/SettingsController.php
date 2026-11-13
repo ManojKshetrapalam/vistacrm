@@ -65,7 +65,7 @@ class SettingsController extends Controller
     public function updateSettings(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -93,7 +93,7 @@ class SettingsController extends Controller
     public function storeTemplate(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -122,7 +122,7 @@ class SettingsController extends Controller
     public function updateTemplate(Request $request, WhatsappTemplate $template): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -144,7 +144,7 @@ class SettingsController extends Controller
     public function deleteTemplate(Request $request, WhatsappTemplate $template): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -156,7 +156,7 @@ class SettingsController extends Controller
     public function diagnostics(Request $request, WhatsAppManager $whatsAppManager): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('settings.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 

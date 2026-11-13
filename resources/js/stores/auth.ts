@@ -4,10 +4,20 @@ import api from '../api/axios';
 export interface UserProfile {
   id: number;
   name: string;
+  username?: string;
   email: string;
   phone?: string;
-  role: 'admin' | 'employee';
+  role: string;
+  role_id?: number | null;
+  role_name?: string;
+  role_display_name?: string;
+  team_id?: number | null;
+  team_name?: string | null;
   is_active: boolean;
+  must_change_password?: boolean;
+  permissions?: string[];
+  visibility_scope?: 'assigned_only' | 'team_only' | 'all';
+  allowed_categories?: string[] | null;
   notification_preferences?: {
     whatsapp_enabled?: boolean;
     email_enabled?: boolean;
@@ -27,8 +37,20 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => !!state.token && !!state.user,
-    isAdmin: (state) => state.user?.role === 'admin',
-    isEmployee: (state) => state.user?.role === 'employee',
+    isAdmin: (state) => state.user?.role === 'admin' || state.user?.role_name === 'admin',
+    isEmployee: (state) => state.user?.role !== 'admin' && state.user?.role_name !== 'admin',
+    can: (state) => (permission: string): boolean => {
+      if (state.user?.role === 'admin' || state.user?.role_name === 'admin') return true;
+      return (state.user?.permissions || []).includes(permission);
+    },
+    canAny: (state) => (permissions: string[]): boolean => {
+      if (state.user?.role === 'admin' || state.user?.role_name === 'admin') return true;
+      return permissions.some(p => (state.user?.permissions || []).includes(p));
+    },
+    canAll: (state) => (permissions: string[]): boolean => {
+      if (state.user?.role === 'admin' || state.user?.role_name === 'admin') return true;
+      return permissions.every(p => (state.user?.permissions || []).includes(p));
+    },
   },
 
   actions: {

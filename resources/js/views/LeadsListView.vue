@@ -12,6 +12,7 @@
 
         <div class="flex items-center gap-2.5">
           <button
+            v-if="authStore.can('leads.export')"
             @click="exportCsv"
             :disabled="exporting || leads.length === 0"
             class="px-4 py-2 bg-white border border-vb-plum/20 hover:border-vb-plum text-vb-plum rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-40"
@@ -21,6 +22,7 @@
           </button>
 
           <router-link
+            v-if="authStore.can('leads.create')"
             to="/leads/new"
             class="btn-primary text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5 shadow-md"
           >
@@ -30,8 +32,8 @@
         </div>
       </div>
 
-      <!-- Admin Tabs: Active Pipeline vs Archived Leads -->
-      <div v-if="authStore.isAdmin" class="flex items-center gap-2 border-b border-vb-plum/10 pb-3 text-xs font-semibold">
+      <!-- Pipeline Tabs: Active Pipeline vs Archived Leads -->
+      <div v-if="authStore.can('leads.archive') || authStore.can('leads.restore')" class="flex items-center gap-2 border-b border-vb-plum/10 pb-3 text-xs font-semibold">
         <button
           type="button"
           @click="setArchivedMode(false)"
@@ -120,9 +122,9 @@
               <option v-for="src in leadSources" :key="src" :value="src">{{ src }}</option>
             </select>
 
-            <!-- Employee Filter (Admin Only) -->
+            <!-- Employee Filter -->
             <select
-              v-if="authStore.isAdmin"
+              v-if="authStore.isAdmin || authStore.can('leads.assign') || authStore.user?.visibility_scope !== 'assigned_only'"
               v-model="filters.assigned_to"
               @change="fetchLeads"
               class="bg-white border border-vb-plum/15 rounded-lg px-2.5 py-1 text-xs text-vb-ink"
@@ -544,8 +546,8 @@ const fetchLeads = async () => {
         await offlineStorage.setLeads(leads.value);
       }
 
-      // Fetch archived badge count if admin
-      if (authStore.isAdmin && !viewArchived.value) {
+      // Fetch archived badge count if permitted
+      if ((authStore.can('leads.archive') || authStore.can('leads.restore')) && !viewArchived.value) {
         api.get('/leads', { params: { archived: 1, per_page: 1 } })
           .then((res) => {
             archivedCount.value = res.data.total || 0;
@@ -694,18 +696,18 @@ const getLeadActions = (lead: any): ActionMenuItem[] => {
         label: 'Restore Lead to Pipeline',
         icon: RotateCcw,
         warning: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.restore'),
         action: () => openRestoreModal(lead),
       },
       {
         divider: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.force_delete'),
       },
       {
         label: 'Permanently Delete Record',
         icon: Trash2,
         danger: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.force_delete'),
         action: () => openForceDeleteModal(lead),
       },
     ];
@@ -720,22 +722,24 @@ const getLeadActions = (lead: any): ActionMenuItem[] => {
     {
       label: 'Edit Lead Profile',
       icon: Edit,
+      show: authStore.can('leads.edit'),
       action: () => openEditModal(lead),
     },
     {
       label: 'Schedule Follow-up',
       icon: CalendarClock,
+      show: authStore.can('follow_ups.manage'),
       action: () => openFollowUpModal(lead),
     },
     {
       divider: true,
-      show: authStore.isAdmin,
+      show: authStore.can('leads.archive'),
     },
     {
       label: 'Archive Lead',
       icon: Archive,
       danger: true,
-      show: authStore.isAdmin,
+      show: authStore.can('leads.archive'),
       action: () => openArchiveModal(lead),
     },
   ];
@@ -792,7 +796,7 @@ const fetchInitialData = async () => {
   try {
     const settingsRes = await api.get('/settings');
     leadSources.value = (settingsRes.data.lead_sources || []).map((s: any) => s.label);
-    if (authStore.isAdmin) {
+    if (authStore.isAdmin || authStore.can('leads.assign') || authStore.user?.visibility_scope !== 'assigned_only') {
       const empRes = await api.get('/employees');
       employeesList.value = empRes.data;
     }

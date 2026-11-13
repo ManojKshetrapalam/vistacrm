@@ -19,8 +19,8 @@ class ImportController extends Controller
     public function uploadAndPreview(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
-            return response()->json(['message' => 'Only administrators can import leads.'], 403);
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
+            return response()->json(['message' => 'Only administrators or authorized users can import leads.'], 403);
         }
 
         $request->validate([
@@ -60,8 +60,8 @@ class ImportController extends Controller
     public function process(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
-            return response()->json(['message' => 'Only administrators can import leads.'], 403);
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
+            return response()->json(['message' => 'Only administrators or authorized users can import leads.'], 403);
         }
 
         $validated = $request->validate([
@@ -106,7 +106,7 @@ class ImportController extends Controller
     public function history(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -120,7 +120,7 @@ class ImportController extends Controller
     public function downloadFailedReport(Request $request, ImportHistory $history): StreamedResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
             abort(403);
         }
 

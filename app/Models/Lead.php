@@ -130,6 +130,28 @@ class Lead extends Model
             return $query;
         }
 
+        if (!$user->hasPermission('leads.view')) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        // Apply category filter if user has explicit restrictions
+        $allowedCats = $user->getEffectiveAllowedCategories();
+        if ($allowedCats !== null) {
+            $query->whereIn('service_interest', $allowedCats);
+        }
+
+        // Apply visibility scope
+        $scope = $user->getEffectiveVisibilityScope();
+        if ($scope === 'all') {
+            return $query;
+        }
+
+        if ($scope === 'team_only') {
+            $teamMemberIds = $user->teamMemberIds();
+            return $query->whereIn('assigned_to', $teamMemberIds);
+        }
+
+        // Invariant default: assigned_only
         return $query->where('assigned_to', $user->id);
     }
 

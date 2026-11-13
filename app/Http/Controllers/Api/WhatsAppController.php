@@ -25,7 +25,7 @@ class WhatsAppController extends Controller
     public function previewMessage(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('whatsapp.send'))) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -85,7 +85,7 @@ class WhatsAppController extends Controller
     public function logMessageDispatch(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('whatsapp.send'))) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 

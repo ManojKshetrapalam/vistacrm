@@ -43,7 +43,7 @@
             </div>
           </div>
           <button
-            v-if="authStore.isAdmin"
+            v-if="authStore.can('leads.restore')"
             type="button"
             @click="restoreModalOpen = true"
             class="px-4 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs flex items-center gap-1.5 shrink-0 self-start sm:self-auto shadow-sm"
@@ -83,7 +83,7 @@
           <div class="flex flex-wrap items-center gap-2.5">
             <!-- WhatsApp Action -->
             <button
-              v-if="!lead.is_archived"
+              v-if="!lead.is_archived && authStore.can('whatsapp.send')"
               type="button"
               @click="whatsAppModalOpen = true"
               class="px-4 py-2.5 rounded-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-2 transition-all"
@@ -94,7 +94,7 @@
 
             <!-- Call Log Action -->
             <button
-              v-if="!lead.is_archived"
+              v-if="!lead.is_archived && authStore.can('leads.edit')"
               type="button"
               @click="callModalOpen = true"
               class="btn-primary px-4 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2 shadow-md"
@@ -105,7 +105,7 @@
 
             <!-- Schedule Follow-up -->
             <button
-              v-if="!lead.is_archived"
+              v-if="!lead.is_archived && authStore.can('follow_ups.manage')"
               type="button"
               @click="followUpModalOpen = true"
               class="btn-ghost px-4 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2"
@@ -170,9 +170,9 @@
                       <span class="font-semibold text-vb-plum">{{ lead.assigned_employee?.name || 'Unassigned' }}</span>
                     </div>
 
-                    <!-- Admin Reassign Trigger -->
+                    <!-- Reassign Trigger -->
                     <button
-                      v-if="authStore.isAdmin"
+                      v-if="authStore.can('leads.assign')"
                       @click="reassignModalOpen = true"
                       class="text-[11px] text-vb-violet hover:underline font-semibold"
                     >
@@ -587,7 +587,7 @@ const getDetailActions = (): ActionMenuItem[] => {
         label: 'Restore to Active Pipeline',
         icon: RotateCcw,
         warning: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.restore'),
         action: () => {
           actionError.value = '';
           restoreModalOpen.value = true;
@@ -595,13 +595,13 @@ const getDetailActions = (): ActionMenuItem[] => {
       },
       {
         divider: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.force_delete'),
       },
       {
         label: 'Permanently Delete Record',
         icon: Trash2,
         danger: true,
-        show: authStore.isAdmin,
+        show: authStore.can('leads.force_delete'),
         action: () => {
           actionError.value = '';
           forceDeleteModalOpen.value = true;
@@ -614,6 +614,7 @@ const getDetailActions = (): ActionMenuItem[] => {
     {
       label: 'Edit Lead Details',
       icon: Edit,
+      show: authStore.can('leads.edit'),
       action: () => {
         editModalOpen.value = true;
       },
@@ -621,20 +622,20 @@ const getDetailActions = (): ActionMenuItem[] => {
     {
       label: 'Reassign Representative',
       icon: UserCheck,
-      show: authStore.isAdmin,
+      show: authStore.can('leads.assign'),
       action: () => {
         reassignModalOpen.value = true;
       },
     },
     {
       divider: true,
-      show: authStore.isAdmin,
+      show: authStore.can('leads.archive'),
     },
     {
       label: 'Archive Lead',
       icon: Archive,
       danger: true,
-      show: authStore.isAdmin,
+      show: authStore.can('leads.archive'),
       action: () => {
         actionError.value = '';
         archiveModalOpen.value = true;

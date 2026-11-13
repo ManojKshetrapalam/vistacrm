@@ -127,6 +127,9 @@ class DatabaseSeeder extends Seeder
             $users[$emp['username']] = $user;
         }
 
+        // 2.5 Seed Permissions, Roles, Teams, and Assignments
+        $this->call(PermissionsSeeder::class);
+
         // 3. Seed CRM Settings & Tenant / Company Configuration
         CrmSetting::set('company_info', [
             'name' => 'Vistabound Integrated Solutions LLP',

@@ -21,10 +21,18 @@ class FollowUpController extends Controller
             'user:id,name,email',
         ]);
 
-        if (!$user->isAdmin()) {
+        $scope = $user->getEffectiveVisibilityScope();
+        if ($scope === 'all') {
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->input('user_id'));
+            }
+        } elseif ($scope === 'team_only') {
+            $query->whereIn('user_id', $user->teamMemberIds());
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->input('user_id'));
+            }
+        } else {
             $query->where('user_id', $user->id);
-        } elseif ($request->filled('user_id')) {
-            $query->where('user_id', $request->input('user_id'));
         }
 
         $tab = $request->input('tab', 'today');
@@ -54,7 +62,9 @@ class FollowUpController extends Controller
 
         // Also return counts for the tabs
         $countsQuery = FollowUp::query();
-        if (!$user->isAdmin()) {
+        if ($scope === 'team_only') {
+            $countsQuery->whereIn('user_id', $user->teamMemberIds());
+        } elseif ($scope !== 'all') {
             $countsQuery->where('user_id', $user->id);
         }
 
@@ -80,7 +90,7 @@ class FollowUpController extends Controller
     public function store(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('follow_ups.manage'))) {
             return response()->json(['message' => 'Unauthorized to schedule follow-ups for this lead.'], 403);
         }
 

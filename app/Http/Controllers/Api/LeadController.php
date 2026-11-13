@@ -21,7 +21,8 @@ class LeadController extends Controller
         $user = $request->user();
 
         $isArchived = $request->boolean('archived') || $request->input('status') === 'archived';
-        $query = ($isArchived && $user->isAdmin())
+        $canViewArchived = $user->isAdmin() || $user->hasPermission('leads.archive') || $user->hasPermission('leads.restore');
+        $query = ($isArchived && $canViewArchived)
             ? Lead::onlyTrashed()->accessibleBy($user)
             : Lead::accessibleBy($user);
 
@@ -51,7 +52,7 @@ class LeadController extends Controller
             $query->where('service_interest', $request->input('service_interest'));
         }
 
-        if ($user->isAdmin() && $request->filled('assigned_to')) {
+        if (($user->isAdmin() || $user->getEffectiveVisibilityScope() !== 'assigned_only') && $request->filled('assigned_to')) {
             if ($request->input('assigned_to') === 'unassigned') {
                 $query->whereNull('assigned_to');
             } else {
@@ -99,10 +100,11 @@ class LeadController extends Controller
     public function show(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $query = $user->isAdmin() ? Lead::withTrashed() : Lead::query();
+        $canViewArchived = $user->isAdmin() || $user->hasPermission('leads.archive') || $user->hasPermission('leads.restore');
+        $query = $canViewArchived ? Lead::withTrashed() : Lead::query();
         $lead = $query->findOrFail($id);
 
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead)) {
             return response()->json(['message' => 'Unauthorized access to this lead.'], 403);
         }
 
@@ -125,6 +127,9 @@ class LeadController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
+        if (!$user->isAdmin() && !$user->hasPermission('leads.create')) {
+            return response()->json(['message' => 'Unauthorized to create leads.'], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -167,9 +172,9 @@ class LeadController extends Controller
             ], 409);
         }
 
-        // Assignee logic: Employees default to themselves if creating, Admin can specify
+        // Assignee logic: Authorized assigners can specify assignee, otherwise defaults to creator
         $assigneeId = null;
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->hasPermission('leads.assign')) {
             $assigneeId = $validated['assigned_to'] ?? null;
         } else {
             $assigneeId = $user->id;
@@ -307,7 +312,7 @@ class LeadController extends Controller
     public function update(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('leads.edit'))) {
             return response()->json(['message' => 'Unauthorized to update this lead.'], 403);
         }
 
@@ -378,8 +383,8 @@ class LeadController extends Controller
             ]);
         }
 
-        // Assignment change (Admin only)
-        if ($user->isAdmin() && array_key_exists('assigned_to', $validated) && $validated['assigned_to'] != $oldAssignee) {
+        // Assignment change (Authorized assigners only)
+        if (($user->isAdmin() || $user->hasPermission('leads.assign')) && array_key_exists('assigned_to', $validated) && $validated['assigned_to'] != $oldAssignee) {
             $lead->assigned_to = $validated['assigned_to'];
             $newAssignee = $lead->assigned_to ? User::find($lead->assigned_to) : null;
             $assigneeName = $newAssignee ? $newAssignee->name : 'Unassigned';
@@ -430,8 +435,8 @@ class LeadController extends Controller
     public function assign(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
-            return response()->json(['message' => 'Only administrators can reassign leads.'], 403);
+        if (!$user->isAdmin() && !$user->hasPermission('leads.assign')) {
+            return response()->json(['message' => 'Only administrators or authorized users can reassign leads.'], 403);
         }
 
         $validated = $request->validate([
@@ -491,7 +496,7 @@ class LeadController extends Controller
     public function logCall(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('leads.edit'))) {
             return response()->json(['message' => 'Unauthorized to log calls for this lead.'], 403);
         }
 
@@ -552,7 +557,7 @@ class LeadController extends Controller
     public function addNote(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && $lead->assigned_to !== $user->id) {
+        if (!$user->canAccessLead($lead) || (!$user->isAdmin() && !$user->hasPermission('leads.edit'))) {
             return response()->json(['message' => 'Unauthorized to add notes for this lead.'], 403);
         }
 
@@ -577,9 +582,12 @@ class LeadController extends Controller
         ]);
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request): StreamedResponse|JsonResponse
     {
         $user = $request->user();
+        if (!$user->isAdmin() && !$user->hasPermission('leads.export')) {
+            return response()->json(['message' => 'Unauthorized to export leads.'], 403);
+        }
 
         $query = Lead::accessibleBy($user)
             ->with(['assignedEmployee:id,name', 'creator:id,name'])
@@ -591,7 +599,7 @@ class LeadController extends Controller
         if ($request->filled('source')) {
             $query->where('source', $request->input('source'));
         }
-        if ($user->isAdmin() && $request->filled('assigned_to')) {
+        if (($user->isAdmin() || $user->getEffectiveVisibilityScope() !== 'assigned_only') && $request->filled('assigned_to')) {
             $query->where('assigned_to', $request->input('assigned_to'));
         }
 
@@ -659,8 +667,8 @@ class LeadController extends Controller
     public function destroy(Request $request, Lead $lead): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
-            return response()->json(['message' => 'Unauthorized. Only administrators can archive leads.'], 403);
+        if (!$user->isAdmin() && !$user->hasPermission('leads.archive') && !$user->hasPermission('leads.delete')) {
+            return response()->json(['message' => 'Unauthorized. Only administrators or authorized users can archive leads.'], 403);
         }
 
         // Cancel any pending follow-up reminders
@@ -691,8 +699,8 @@ class LeadController extends Controller
     public function restore(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
-            return response()->json(['message' => 'Unauthorized. Only administrators can restore leads.'], 403);
+        if (!$user->isAdmin() && !$user->hasPermission('leads.restore')) {
+            return response()->json(['message' => 'Unauthorized. Only administrators or authorized users can restore leads.'], 403);
         }
 
         $lead = Lead::onlyTrashed()->findOrFail($id);
@@ -721,7 +729,7 @@ class LeadController extends Controller
     public function forceDelete(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('leads.force_delete')) {
             return response()->json(['message' => 'Unauthorized. Only administrators can permanently delete leads.'], 403);
         }
 

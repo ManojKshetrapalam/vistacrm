@@ -20,12 +20,13 @@ class EmployeeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('employees.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
         $now = Carbon::now();
-        $employees = User::orderBy('role', 'asc')
+        $employees = User::with(['roleRelation', 'team'])
+            ->orderBy('role', 'asc')
             ->orderBy('name', 'asc')
             ->get()
             ->map(function ($emp) use ($now) {
@@ -46,7 +47,12 @@ class EmployeeController extends Controller
                     'email' => $emp->email,
                     'phone' => $emp->phone,
                     'role' => $emp->role,
-                    'is_active' => $emp->is_active,
+                    'role_id' => $emp->role_id,
+                    'role_name' => $emp->roleRelation?->name ?? $emp->role,
+                    'role_display_name' => $emp->roleRelation?->display_name ?? ucfirst($emp->role),
+                    'team_id' => $emp->team_id,
+                    'team_name' => $emp->team?->name,
+                    'is_active' => (bool)$emp->is_active,
                     'created_at' => $emp->created_at->format('Y-m-d'),
                     'stats' => [
                         'assigned_leads' => $assignedLeadsCount,
@@ -63,7 +69,7 @@ class EmployeeController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin()) {
+        if (!$user->isAdmin() && !$user->hasPermission('employees.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -72,15 +78,32 @@ class EmployeeController extends Controller
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8',
-            'role' => 'required|in:admin,employee',
+            'role' => 'nullable|in:admin,employee',
+            'role_id' => 'nullable|exists:roles,id',
+            'team_id' => 'nullable|exists:teams,id',
         ]);
+
+        $roleString = $validated['role'] ?? 'employee';
+        $roleId = $validated['role_id'] ?? null;
+
+        if ($roleId) {
+            $roleModel = \App\Models\Role::find($roleId);
+            if ($roleModel) {
+                $roleString = $roleModel->name === 'admin' ? 'admin' : 'employee';
+            }
+        } elseif ($roleString) {
+            $roleModel = \App\Models\Role::where('name', $roleString)->first();
+            $roleId = $roleModel?->id;
+        }
 
         $employee = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role' => $roleString,
+            'role_id' => $roleId,
+            'team_id' => $validated['team_id'] ?? null,
             'is_active' => true,
             'notification_preferences' => [
                 'whatsapp_enabled' => true,
@@ -99,7 +122,7 @@ class EmployeeController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin()) {
+        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -108,7 +131,9 @@ class EmployeeController extends Controller
             'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
             'phone' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
-            'role' => 'sometimes|required|in:admin,employee',
+            'role' => 'nullable|in:admin,employee',
+            'role_id' => 'nullable|exists:roles,id',
+            'team_id' => 'nullable|exists:teams,id',
             'is_active' => 'sometimes|required|boolean',
         ]);
 
@@ -124,9 +149,27 @@ class EmployeeController extends Controller
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
         }
-        if (!empty($validated['role'])) {
+
+        if (array_key_exists('role_id', $validated)) {
+            $user->role_id = $validated['role_id'];
+            if ($validated['role_id']) {
+                $roleModel = \App\Models\Role::find($validated['role_id']);
+                if ($roleModel) {
+                    $user->role = $roleModel->name === 'admin' ? 'admin' : 'employee';
+                }
+            }
+        } elseif (!empty($validated['role'])) {
             $user->role = $validated['role'];
+            $roleModel = \App\Models\Role::where('name', $validated['role'])->first();
+            if ($roleModel) {
+                $user->role_id = $roleModel->id;
+            }
         }
+
+        if (array_key_exists('team_id', $validated)) {
+            $user->team_id = $validated['team_id'];
+        }
+
         if (isset($validated['is_active'])) {
             if ($user->id === $currentUser->id && !$validated['is_active']) {
                 return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
@@ -145,7 +188,7 @@ class EmployeeController extends Controller
     public function toggleStatus(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin()) {
+        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -184,7 +227,7 @@ class EmployeeController extends Controller
     public function assignedLeads(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin()) {
+        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -201,7 +244,7 @@ class EmployeeController extends Controller
     public function reassignLeads(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin()) {
+        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage') && !$currentUser->hasPermission('leads.assign')) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 

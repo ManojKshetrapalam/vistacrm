@@ -50,17 +50,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful',
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'username' => $user->username,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'role' => $user->role,
-                'is_active' => $user->is_active,
-                'must_change_password' => (bool)$user->must_change_password,
-                'notification_preferences' => $user->notification_preferences,
-            ],
+            'user' => $this->formatUserResponse($user),
         ]);
     }
 
@@ -73,17 +63,33 @@ class AuthController extends Controller
             ->count();
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'role' => $user->role,
-                'is_active' => $user->is_active,
-                'notification_preferences' => $user->notification_preferences,
-            ],
+            'user' => $this->formatUserResponse($user),
             'unread_notifications_count' => $unreadCount,
         ]);
+    }
+
+    protected function formatUserResponse(User $user): array
+    {
+        $role = $user->roleRelation;
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'username' => $user->username,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'role' => $user->role,
+            'role_id' => $user->role_id,
+            'role_name' => $role?->name ?? $user->role,
+            'role_display_name' => $role?->display_name ?? ucfirst($user->role),
+            'team_id' => $user->team_id,
+            'team_name' => $user->team?->name,
+            'is_active' => (bool)$user->is_active,
+            'must_change_password' => (bool)$user->must_change_password,
+            'notification_preferences' => $user->notification_preferences,
+            'permissions' => $user->getEffectivePermissions(),
+            'visibility_scope' => $user->getEffectiveVisibilityScope(),
+            'allowed_categories' => $user->getEffectiveAllowedCategories(),
+        ];
     }
 
     public function updateProfile(Request $request): JsonResponse

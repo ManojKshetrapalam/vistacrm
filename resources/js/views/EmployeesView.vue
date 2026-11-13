@@ -120,14 +120,20 @@
                   </div>
                 </td>
 
-                <!-- Role -->
+                <!-- Role & Team -->
                 <td class="py-3 px-4">
-                  <span
-                    class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                    :class="emp.role === 'admin' ? 'bg-vb-plum text-white' : 'bg-vb-teal/10 text-vb-teal'"
-                  >
-                    {{ emp.role === 'admin' ? 'Administrator' : 'Employee' }}
-                  </span>
+                  <div>
+                    <span
+                      class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                      :class="emp.role === 'admin' ? 'bg-vb-plum text-white' : 'bg-vb-teal/10 text-vb-teal'"
+                    >
+                      {{ emp.role_display_name || emp.role_relation?.display_name || (emp.role === 'admin' ? 'Administrator' : 'Employee') }}
+                    </span>
+                    <div v-if="emp.team_name || emp.team?.name" class="text-[10px] text-vb-muted mt-1 font-semibold flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                      <span>{{ emp.team_name || emp.team?.name }}</span>
+                    </div>
+                  </div>
                 </td>
 
                 <!-- Account Status -->
@@ -210,10 +216,21 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Role *</label>
-            <select v-model="createForm.role" class="field text-sm">
-              <option value="employee">Solutions Representative (Employee)</option>
-              <option value="admin">Administrator</option>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Role Template *</label>
+            <select v-model="createForm.role_id" class="field text-sm" @change="onRoleSelectChange('create')">
+              <option v-for="r in rolesList" :key="r.id" :value="r.id">
+                {{ r.display_name }} ({{ r.name }})
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Assigned Team</label>
+            <select v-model="createForm.team_id" class="field text-sm">
+              <option :value="null">No Team Assigned</option>
+              <option v-for="t in teamsList" :key="t.id" :value="t.id">
+                {{ t.name }}
+              </option>
             </select>
           </div>
 
@@ -273,10 +290,21 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Role *</label>
-            <select v-model="editForm.role" class="field text-sm">
-              <option value="employee">Solutions Representative (Employee)</option>
-              <option value="admin">Administrator</option>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Role Template *</label>
+            <select v-model="editForm.role_id" class="field text-sm" @change="onRoleSelectChange('edit')">
+              <option v-for="r in rolesList" :key="r.id" :value="r.id">
+                {{ r.display_name }} ({{ r.name }})
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">Assigned Team</label>
+            <select v-model="editForm.team_id" class="field text-sm">
+              <option :value="null">No Team Assigned</option>
+              <option v-for="t in teamsList" :key="t.id" :value="t.id">
+                {{ t.name }}
+              </option>
             </select>
           </div>
 
@@ -411,6 +439,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
 import AppLayout from '../components/AppLayout.vue';
@@ -425,13 +454,17 @@ import {
   UserX,
   Briefcase,
   Edit,
+  ShieldCheck,
 } from 'lucide-vue-next';
 
+const router = useRouter();
 const authStore = useAuthStore();
 
 const loading = ref(true);
 const saving = ref(false);
 const employees = ref<any[]>([]);
+const rolesList = ref<any[]>([]);
+const teamsList = ref<any[]>([]);
 const statusFilter = ref<'all' | 'active' | 'deactivated'>('all');
 
 const createModalOpen = ref(false);
@@ -457,6 +490,8 @@ const createForm = reactive({
   phone: '',
   password: '',
   role: 'employee',
+  role_id: null as number | null,
+  team_id: null as number | null,
 });
 
 const editForm = reactive({
@@ -465,7 +500,17 @@ const editForm = reactive({
   phone: '',
   password: '',
   role: 'employee',
+  role_id: null as number | null,
+  team_id: null as number | null,
 });
+
+const onRoleSelectChange = (formType: 'create' | 'edit') => {
+  const form = formType === 'create' ? createForm : editForm;
+  const match = rolesList.value.find((r) => r.id === form.role_id);
+  if (match) {
+    form.role = match.name;
+  }
+};
 
 const activeCount = computed(() => employees.value.filter((e) => e.is_active).length);
 const deactivatedCount = computed(() => employees.value.filter((e) => !e.is_active).length);
@@ -486,8 +531,24 @@ const filteredEmployees = computed(() => {
 const fetchEmployees = async () => {
   loading.value = true;
   try {
-    const res = await api.get('/employees');
-    employees.value = res.data;
+    const promises: Promise<any>[] = [api.get('/employees')];
+    if (authStore.can('roles.manage')) {
+      promises.push(api.get('/roles'));
+      promises.push(api.get('/teams'));
+    }
+    const results = await Promise.all(promises);
+    employees.value = results[0].data;
+    if (results[1]) {
+      rolesList.value = results[1].data;
+      if (!createForm.role_id && rolesList.value.length > 0) {
+        const defaultRole = rolesList.value.find((r) => r.name === 'sales_executive') || rolesList.value[0];
+        createForm.role_id = defaultRole.id;
+        createForm.role = defaultRole.name;
+      }
+    }
+    if (results[2]) {
+      teamsList.value = results[2].data;
+    }
   } catch (err) {
     console.error('Failed to fetch employees', err);
   } finally {
@@ -500,13 +561,22 @@ const handleCreateEmployee = async () => {
   modalError.value = '';
 
   try {
-    await api.post('/employees', createForm);
+    await api.post('/employees', {
+      name: createForm.name,
+      email: createForm.email,
+      phone: createForm.phone,
+      password: createForm.password,
+      role: createForm.role,
+      role_id: createForm.role_id,
+      team_id: createForm.team_id,
+    });
     createModalOpen.value = false;
     createForm.name = '';
     createForm.email = '';
     createForm.phone = '';
     createForm.password = '';
     createForm.role = 'employee';
+    createForm.team_id = null;
     await fetchEmployees();
   } catch (err: any) {
     modalError.value = err.response?.data?.message || 'Failed to create employee account.';
@@ -522,6 +592,8 @@ const openEditModal = (emp: any) => {
   editForm.phone = emp.phone || '';
   editForm.password = '';
   editForm.role = emp.role;
+  editForm.role_id = emp.role_id || (rolesList.value.find((r) => r.name === emp.role)?.id ?? null);
+  editForm.team_id = emp.team_id ?? null;
   modalError.value = '';
   editModalOpen.value = true;
 };
@@ -537,6 +609,8 @@ const handleEditEmployee = async () => {
       email: editForm.email,
       phone: editForm.phone || null,
       role: editForm.role,
+      role_id: editForm.role_id,
+      team_id: editForm.team_id,
     };
     if (editForm.password) {
       payload.password = editForm.password;
@@ -631,18 +705,30 @@ const getEmployeeActions = (emp: any): ActionMenuItem[] => {
   const isSelf = emp.id === authStore.user?.id;
   const isLastActiveAdmin = emp.role === 'admin' && emp.is_active && activeAdminsCount.value <= 1;
 
+  const actions: ActionMenuItem[] = [
+    {
+      label: 'Edit Account Details',
+      icon: Edit,
+      action: () => openEditModal(emp),
+    },
+  ];
+
+  if (authStore.can('roles.manage')) {
+    actions.push({
+      label: 'Configure Permissions',
+      icon: ShieldCheck,
+      action: () => router.push(`/roles?user=${emp.id}`),
+    });
+  }
+
+  actions.push({
+    label: `View Assigned Leads (${emp.stats?.assigned_leads || 0})`,
+    icon: Briefcase,
+    action: () => openAssignedLeadsModal(emp),
+  });
+
   if (emp.is_active) {
-    return [
-      {
-        label: 'Edit Account Details',
-        icon: Edit,
-        action: () => openEditModal(emp),
-      },
-      {
-        label: `View Assigned Leads (${emp.stats?.assigned_leads || 0})`,
-        icon: Briefcase,
-        action: () => openAssignedLeadsModal(emp),
-      },
+    actions.push(
       {
         divider: true,
       },
@@ -656,31 +742,23 @@ const getEmployeeActions = (emp: any): ActionMenuItem[] => {
         danger: true,
         disabled: isSelf || isLastActiveAdmin,
         action: () => openDeactivateModal(emp),
+      }
+    );
+  } else {
+    actions.push(
+      {
+        divider: true,
       },
-    ];
+      {
+        label: 'Reactivate Account',
+        icon: UserCheck,
+        warning: true,
+        action: () => openReactivateModal(emp),
+      }
+    );
   }
 
-  return [
-    {
-      label: 'Edit Account Details',
-      icon: Edit,
-      action: () => openEditModal(emp),
-    },
-    {
-      label: `View Assigned Leads (${emp.stats?.assigned_leads || 0})`,
-      icon: Briefcase,
-      action: () => openAssignedLeadsModal(emp),
-    },
-    {
-      divider: true,
-    },
-    {
-      label: 'Reactivate Account',
-      icon: UserCheck,
-      warning: true,
-      action: () => openReactivateModal(emp),
-    },
-  ];
+  return actions;
 };
 
 onMounted(() => {

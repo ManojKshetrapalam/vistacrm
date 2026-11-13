@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\MobileSyncController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +87,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/settings/templates', [SettingsController::class, 'storeTemplate']);
     Route::put('/settings/templates/{template}', [SettingsController::class, 'updateTemplate']);
     Route::delete('/settings/templates/{template}', [SettingsController::class, 'deleteTemplate']);
+
+    // Roles & Granular Permissions
+    Route::get('/roles', [RolePermissionController::class, 'roles']);
+    Route::post('/roles', [RolePermissionController::class, 'storeRole']);
+    Route::put('/roles/{id}', [RolePermissionController::class, 'updateRole']);
+    Route::delete('/roles/{id}', [RolePermissionController::class, 'deleteRole']);
+    Route::get('/permissions', [RolePermissionController::class, 'permissions']);
+    Route::get('/teams', [RolePermissionController::class, 'teams']);
+
+    // User-Level Overrides (Inherit / Allow / Deny Model)
+    Route::get('/users/{id}/permissions', [RolePermissionController::class, 'getUserPermissions']);
+    Route::match(['post', 'put'], '/users/{id}/permissions', [RolePermissionController::class, 'updateUserPermissions']);
+    Route::match(['post', 'put'], '/users/{id}/visibility', [RolePermissionController::class, 'updateUserVisibility']);
+    Route::match(['post', 'put'], '/users/{id}/categories', [RolePermissionController::class, 'updateUserCategories']);
+    Route::post('/users/{id}/permissions/reset', [RolePermissionController::class, 'resetUserPermissions']);
+
+    // Permission Audit Logs
+    Route::get('/audit-logs', [RolePermissionController::class, 'auditLogs']);
+    Route::get('/permissions/audit-logs', [RolePermissionController::class, 'auditLogs']);
 
     // Mobile Offline Sync & Device Push Tokens
     Route::prefix('mobile')->group(function () {

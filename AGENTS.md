@@ -40,3 +40,32 @@
    - Self-deactivation is strictly forbidden.
    - Deactivation must automatically revoke all active personal access tokens (`tokens()->delete()`) and purge all push device tokens (`deviceTokens()->delete()`).
    - Deactivated employees retain their historic lead attribution unless explicitly reassigned via the bulk reassignment endpoint (`/api/employees/{id}/reassign-leads`).
+
+9. **Permanent Production Database Protection Rule**:
+   - **Strict Protection**: The production database contains real business data and must NEVER be modified during development, testing, security verification, or staging preparation.
+   - **Default Posture**: Production database is **READ-ONLY** and **OUT OF SCOPE** for all development and staging activities.
+   - **Strictly Prohibited Without Separate Explicit Authorization**:
+     - `php artisan migrate` against production.
+     - `php artisan migrate:fresh`, `migrate:refresh`, or `migrate:rollback` against production.
+     - Running database seeders (`db:seed`) against production.
+     - Modifying users, employees, roles, permissions, or teams.
+     - Revoking or regenerating production Personal Access Tokens.
+     - Performing bulk updates, bulk deletes, cleanups, or table truncations.
+     - Automated scripts, deployment hooks, or CI/CD pipelines writing to production.
+     - Any application or database operation that modifies live business records.
+   - **Mandatory Environment Separation**:
+     1. Local development must exclusively use `vista_crm_local`.
+     2. Staging must use a dedicated, isolated staging database.
+     3. Production remains separate, isolated, and untouched.
+     4. Never copy staging configuration or `.env` into production.
+     5. Never point local tests, seeders, or staging scripts at production.
+     6. Verify database host, database name, port, and `APP_ENV` before executing any database operation.
+   - **Staging Deployment Safeguards**:
+     - Confirm staging database identity prior to executing commands.
+     - Confirm production credentials are NOT in use.
+     - Audit deployment scripts and hooks for implicit migrations or seeders.
+     - Verify zero production database connections are established.
+   - **Final Release Condition**:
+     - No release can be approved if it requires unapproved production database migrations or modifications.
+     - Any future production database change requires an independent migration plan, backup and recovery strategy, impact assessment, and explicit authorization.
+

@@ -51,6 +51,8 @@ class DeployPreflightCommand extends Command
     protected const APPROVED_STAGING_DATABASES = [
         'vista_crm_staging',
         'vistabound_crm_staging',
+        'u996219523_vista_crm_staging',
+        'vista_crm_staging.sqlite',
     ];
 
     /**
@@ -119,7 +121,7 @@ class DeployPreflightCommand extends Command
         $this->line("  ✓ Database host '{$dbHost}' is verified non-production");
 
         // 5. Validate Database Name
-        $normalizedDb = strtolower($dbName);
+        $normalizedDb = strtolower(basename($dbName));
         foreach (self::PROHIBITED_DATABASES as $prohibitedDb) {
             if ($normalizedDb === $prohibitedDb || str_contains($normalizedDb, $prohibitedDb)) {
                 $this->error("CRITICAL SAFETY VIOLATION: Database name '{$dbName}' matches prohibited production database identifier '{$prohibitedDb}'!");
@@ -134,17 +136,22 @@ class DeployPreflightCommand extends Command
         }
         $this->line("  ✓ Database name '{$dbName}' is verified as an approved isolated staging database");
 
-        // 6. Validate Staging Database Credentials
-        if (empty(trim($dbUser))) {
-            $this->error('FAIL: Staging database username (DB_USERNAME) is missing or empty.');
-            return 1;
-        }
+        // 6. Validate Staging Database Credentials (for network databases)
+        $isSqlite = $connection === 'sqlite' || str_ends_with($normalizedDb, '.sqlite');
+        if (!$isSqlite) {
+            if (empty(trim($dbUser))) {
+                $this->error('FAIL: Staging database username (DB_USERNAME) is missing or empty.');
+                return 1;
+            }
 
-        if ($dbPass === '' && !in_array($dbHost, ['127.0.0.1', 'localhost'], true)) {
-            $this->error('FAIL: Staging database password (DB_PASSWORD) is empty for non-local host.');
-            return 1;
+            if ($dbPass === '' && !in_array($dbHost, ['127.0.0.1', 'localhost'], true)) {
+                $this->error('FAIL: Staging database password (DB_PASSWORD) is empty for non-local host.');
+                return 1;
+            }
+            $this->line('  ✓ Staging database credentials are present');
+        } else {
+            $this->line('  ✓ Staging SQLite database driver verified');
         }
-        $this->line('  ✓ Staging database credentials are present');
 
         // 7. Optional Staging Database Connectivity Check
         if ($this->option('check-database')) {

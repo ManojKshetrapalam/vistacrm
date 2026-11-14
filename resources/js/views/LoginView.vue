@@ -117,13 +117,13 @@
               <span>{{ loading ? 'Authenticating...' : 'Sign In to CRM' }}</span>
             </button>
 
-            <!-- Production Connection Status Footer -->
+            <!-- Host Connection Status Footer -->
             <div class="pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-vb-muted">
               <span class="flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>Production Endpoint</span>
+                <span class="w-1.5 h-1.5 rounded-full" :class="isStaging ? 'bg-amber-500' : 'bg-emerald-500'"></span>
+                <span>{{ isStaging ? 'Staging Environment' : 'Production Endpoint' }}</span>
               </span>
-              <span class="font-mono text-[10px] text-vb-plum/70 font-medium">vistaboundintegrated.com</span>
+              <span class="font-mono text-[10px] text-vb-plum/70 font-medium">{{ currentHost }}</span>
             </div>
           </form>
         </div>
@@ -133,13 +133,21 @@
 </template>
 
 <script setup lang="ts">
-import vistaboundLogo from '@/assets/vistabound-logo.png';
 import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import vistaboundLogo from '@/assets/vistabound-logo.png';
+import { useAuthStore } from '../stores/auth';
+import { getAssetUrl, getBasePath } from '@/utils/basePath';
+
+const isStaging = computed(() => {
+  return typeof window !== 'undefined' && (getBasePath() === '/vistacrm1' || window.location.hostname.includes('myworks.sbs'));
+});
+
+const currentHost = computed(() => {
+  return typeof window !== 'undefined' && window.location.host ? window.location.host : 'vistaboundintegrated.com';
+});
 
 const logoUrl = computed(() => {
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
-    return '/CRM/images/vistabound-logo.png';
-  }
   return vistaboundLogo;
 });
 
@@ -147,14 +155,12 @@ const onLogoError = (e: Event) => {
   const el = e.target as HTMLImageElement;
   if (!el.dataset.fallback) {
     el.dataset.fallback = '1';
-    el.src = vistaboundLogo;
+    el.src = getAssetUrl('images/vistabound-logo.png');
   } else if (el.dataset.fallback === '1') {
     el.dataset.fallback = '2';
     el.src = '/images/vistabound-logo.png';
   }
 };
-import { useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
 const authStore = useAuthStore();

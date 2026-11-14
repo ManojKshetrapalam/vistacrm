@@ -160,6 +160,26 @@ class DeploymentSafetyTest extends TestCase
     }
 
     /**
+     * Scenario 7b: Valid isolated SQLite staging configuration -> Pre-flight passes
+     */
+    public function test_scenario_07b_passes_with_valid_sqlite_staging_configuration(): void
+    {
+        $exitCode = Artisan::call('deploy:preflight', [
+            '--target' => 'staging',
+            '--env-name' => 'staging',
+            '--db-name' => '/home/u996219523/domains/myworks.sbs/vistacrm1-app/storage/database/vista_crm_staging.sqlite',
+            '--db-host' => '',
+            '--db-user' => '',
+            '--db-pass' => '',
+        ]);
+
+        $output = Artisan::output();
+        $this->assertEquals(0, $exitCode);
+        $this->assertStringContainsString('PRE-FLIGHT STATUS: PASS', $output);
+        $this->assertStringContainsString('Safe for staging migration/deployment', $output);
+    }
+
+    /**
      * Scenario 8: Staging host unavailable -> Fail without production fallback
      */
     public function test_scenario_08_fails_when_staging_database_is_unreachable_without_production_fallback(): void

@@ -86,8 +86,9 @@ if [[ "${DB_NAME}" =~ ^(vistabound_crm|crm_prod|production|database\.sqlite)$ ]]
 fi
 
 # Must be approved staging database
-if [[ ! "${DB_NAME}" =~ ^(vista_crm_staging|vistabound_crm_staging)$ ]]; then
-  echo "[-] ERROR: DB_DATABASE '${DB_NAME}' is not an approved staging database (vista_crm_staging, vistabound_crm_staging)."
+DB_NAME_BASE=$(basename "${DB_NAME}")
+if [[ ! "${DB_NAME_BASE}" =~ ^(vista_crm_staging|vistabound_crm_staging|u996219523_vista_crm_staging|vista_crm_staging\.sqlite)$ ]]; then
+  echo "[-] ERROR: DB_DATABASE '${DB_NAME}' is not an approved staging database."
   exit 1
 fi
 echo "[+] Staging database name verified: ${DB_NAME}"

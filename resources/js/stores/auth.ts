@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 import api from '../api/axios';
+import { getCsrfCookieUrl } from '@/utils/basePath';
 
 export interface UserProfile {
   id: number;
@@ -80,7 +81,7 @@ export const useAuthStore = defineStore('auth', {
         } else {
           // Web Desk login: Stateful browser session + CSRF cookie bootstrap
           try {
-            await api.get('/sanctum/csrf-cookie');
+            await api.get(getCsrfCookieUrl());
           } catch (csrfErr) {
             console.warn('[auth] CSRF cookie bootstrap note:', csrfErr);
           }

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
 import { useAuthStore } from '../stores/auth';
+import { getRouterBase } from '@/utils/basePath';
 
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
@@ -90,14 +91,6 @@ const routes: RouteRecordRaw[] = [
     redirect: '/dashboard',
   },
 ];
-
-// Determine base URL dynamically (supports root domain, subdomain, or /CRM subfolder)
-const getRouterBase = (): string => {
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
-    return '/CRM/';
-  }
-  return '/';
-};
 
 const router = createRouter({
   history: createWebHistory(getRouterBase()),

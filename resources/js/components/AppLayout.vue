@@ -275,16 +275,21 @@
 </template>
 
 <script setup lang="ts">
-import vistaboundLogo from '@/assets/vistabound-logo.png';
 import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { Capacitor } from '@capacitor/core';
+import vistaboundLogo from '@/assets/vistabound-logo.png';
+import { useAuthStore } from '../stores/auth';
+import { useNotificationStore } from '../stores/notification';
+import api from '../api/axios';
+import LoginFollowUpModal from './LoginFollowUpModal.vue';
+import ActiveReminderModal from './ActiveReminderModal.vue';
+import { isOnline, isSyncing, pendingCount, syncEngine } from '../services/syncEngine';
+import { getAssetUrl } from '@/utils/basePath';
 
 const isNative = Capacitor.isNativePlatform();
 
 const logoUrl = computed(() => {
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/CRM')) {
-    return '/CRM/images/vistabound-logo.png';
-  }
   return vistaboundLogo;
 });
 
@@ -292,19 +297,12 @@ const onLogoError = (e: Event) => {
   const el = e.target as HTMLImageElement;
   if (!el.dataset.fallback) {
     el.dataset.fallback = '1';
-    el.src = vistaboundLogo;
+    el.src = getAssetUrl('images/vistabound-logo.png');
   } else if (el.dataset.fallback === '1') {
     el.dataset.fallback = '2';
     el.src = '/images/vistabound-logo.png';
   }
 };
-import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
-import { useNotificationStore } from '../stores/notification';
-import api from '../api/axios';
-import LoginFollowUpModal from './LoginFollowUpModal.vue';
-import ActiveReminderModal from './ActiveReminderModal.vue';
-import { isOnline, isSyncing, pendingCount, syncEngine } from '../services/syncEngine';
 import {
   LayoutDashboard,
   Users,

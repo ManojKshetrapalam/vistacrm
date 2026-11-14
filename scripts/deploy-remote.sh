@@ -144,7 +144,8 @@ ssh -p "${SSH_PORT}" "${SSH_TARGET}" bash -c "'
     echo \"[-] CRITICAL SAFETY VIOLATION: Remote DB matches prohibited production database!\"
     exit 1
   fi
-  if [[ ! \"\${REMOTE_DB}\" =~ ^(vista_crm_staging|vistabound_crm_staging)$ ]]; then
+  REMOTE_DB_BASE=\$(basename \"\${REMOTE_DB}\")
+  if [[ ! \"\${REMOTE_DB_BASE}\" =~ ^(vista_crm_staging|vistabound_crm_staging|u996219523_vista_crm_staging|vista_crm_staging\.sqlite)$ ]]; then
     echo \"[-] ERROR: Remote DB \${REMOTE_DB} is not an approved staging database.\"
     exit 1
   fi

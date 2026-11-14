@@ -33,12 +33,41 @@ class PermissionManagementTest extends TestCase
         $this->teamSales = Team::firstOrCreate(['name' => 'Corporate Sales Unit'], ['description' => 'Test Unit A']);
         $this->teamRetail = Team::firstOrCreate(['name' => 'Retail & SMB Unit'], ['description' => 'Test Unit B']);
 
-        // Set employee1 and employee2 on teamSales
+        // Reset base roles and clean any lingering overrides from previous runs
+        $salesRole = Role::where('name', 'sales_executive')->first();
+        $this->employee1->role_id = $salesRole?->id;
+        $this->employee1->role = 'employee';
         $this->employee1->team_id = $this->teamSales->id;
         $this->employee1->save();
 
+        $this->employee2->role_id = $salesRole?->id;
+        $this->employee2->role = 'employee';
         $this->employee2->team_id = $this->teamSales->id;
         $this->employee2->save();
+
+        DB::table('user_has_permissions')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+        DB::table('user_visibility_overrides')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+        DB::table('user_category_assignments')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+    }
+
+    protected function tearDown(): void
+    {
+        DB::table('user_has_permissions')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+        DB::table('user_visibility_overrides')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+        DB::table('user_category_assignments')->whereIn('user_id', [$this->employee1->id, $this->employee2->id])->delete();
+
+        $salesRole = Role::where('name', 'sales_executive')->first();
+        if ($salesRole) {
+            $this->employee1->role_id = $salesRole->id;
+            $this->employee1->role = 'employee';
+            $this->employee1->save();
+
+            $this->employee2->role_id = $salesRole->id;
+            $this->employee2->role = 'employee';
+            $this->employee2->save();
+        }
+
+        parent::tearDown();
     }
 
     protected function createLead(string $service = 'Enterprise Software Engineering', ?int $assignedTo = null): Lead
@@ -89,7 +118,8 @@ class PermissionManagementTest extends TestCase
         $this->assertFalse($this->employee1->hasPermission('employees.manage'));
 
         // Clean up
-        $this->employee1->role_id = null;
+        $salesRole = Role::where('name', 'sales_executive')->first();
+        $this->employee1->role_id = $salesRole?->id;
         $this->employee1->role = 'employee';
         $this->employee1->save();
         $role->delete();
@@ -107,9 +137,8 @@ class PermissionManagementTest extends TestCase
         DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
         $this->assertFalse($this->employee1->hasPermission('leads.archive'));
 
-        // Admin grants explicit 'allow' override
-        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
-        $response = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+        // Admin grants explicit 'allow' override via web desk session
+        $response = $this->actingAs($this->admin, 'web')
             ->putJson("/api/users/{$this->employee1->id}/permissions", [
                 'overrides' => [
                     ['permission' => 'leads.archive', 'effect' => 'allow'],
@@ -143,9 +172,8 @@ class PermissionManagementTest extends TestCase
         DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
         $this->assertTrue($this->employee1->hasPermission('leads.create'));
 
-        // Admin grants explicit 'deny' override
-        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
-        $response = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+        // Admin grants explicit 'deny' override via web desk session
+        $response = $this->actingAs($this->admin, 'web')
             ->putJson("/api/users/{$this->employee1->id}/permissions", [
                 'overrides' => [
                     ['permission' => 'leads.create', 'effect' => 'deny'],
@@ -161,8 +189,6 @@ class PermissionManagementTest extends TestCase
 
     public function test_reset_user_permissions_reverts_to_role_default(): void
     {
-        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
-
         // Set overrides
         DB::table('user_has_permissions')->updateOrInsert(
             ['user_id' => $this->employee1->id, 'permission_id' => Permission::first()->id],
@@ -173,8 +199,8 @@ class PermissionManagementTest extends TestCase
             ['scope' => 'all', 'updated_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
         );
 
-        // Call reset endpoint
-        $response = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
+        // Call reset endpoint via web desk session
+        $response = $this->actingAs($this->admin, 'web')
             ->postJson("/api/users/{$this->employee1->id}/permissions/reset");
 
         $response->assertStatus(200);
@@ -992,13 +1018,27 @@ class PermissionManagementTest extends TestCase
             ->assertStatus(403);
     }
 
+    protected function actingAsWeb(User $user): static
+    {
+        auth()->forgetGuards();
+        auth()->shouldUse('web');
+        return $this->actingAs($user, 'web');
+    }
+
+    protected function actingAsMobile(User $user, array $abilities = ['*']): static
+    {
+        auth()->forgetGuards();
+        Sanctum::actingAs($user, $abilities);
+        return $this;
+    }
+
     public function test_phase_g21_mobile_sync_pull_returns_authoritative_effective_permissions_and_refreshes(): void
     {
         // 1. Initial mobile pull - should NOT have leads.export by default
         DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
         $this->employee1->refresh();
 
-        Sanctum::actingAs($this->employee1);
+        $this->actingAsMobile($this->employee1);
         $initialPull = $this->getJson('/api/mobile/sync/pull');
 
         $initialPull->assertStatus(200);
@@ -1022,16 +1062,16 @@ class PermissionManagementTest extends TestCase
         $this->assertNotContains('leads.export', $initialPerms);
 
         // 2. Admin grants explicit allow override on web
-        Sanctum::actingAs($this->admin);
-        $updateRes = $this->putJson("/api/users/{$this->employee1->id}/permissions", [
-            'overrides' => [
-                ['permission' => 'leads.export', 'effect' => 'allow'],
-            ],
-        ]);
+        $updateRes = $this->actingAsWeb($this->admin)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.export', 'effect' => 'allow'],
+                ],
+            ]);
         $updateRes->assertStatus(200);
 
         // 3. Mobile pulls sync again - effective permissions immediately include leads.export
-        Sanctum::actingAs($this->employee1);
+        $this->actingAsMobile($this->employee1);
         $refreshedPull = $this->getJson('/api/mobile/sync/pull');
 
         $refreshedPull->assertStatus(200);
@@ -1039,16 +1079,16 @@ class PermissionManagementTest extends TestCase
         $this->assertContains('leads.export', $refreshedPerms);
 
         // 4. Admin revokes with explicit deny on web
-        Sanctum::actingAs($this->admin);
-        $denyRes = $this->putJson("/api/users/{$this->employee1->id}/permissions", [
-            'overrides' => [
-                ['permission' => 'leads.export', 'effect' => 'deny'],
-            ],
-        ]);
+        $denyRes = $this->actingAsWeb($this->admin)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.export', 'effect' => 'deny'],
+                ],
+            ]);
         $denyRes->assertStatus(200);
 
         // 5. Mobile pulls sync again - effective permissions immediately exclude leads.export
-        Sanctum::actingAs($this->employee1);
+        $this->actingAsMobile($this->employee1);
         $deniedPull = $this->getJson('/api/mobile/sync/pull');
 
         $deniedPull->assertStatus(200);
@@ -1062,17 +1102,17 @@ class PermissionManagementTest extends TestCase
     public function test_phase_g21_backend_enforces_live_permission_dynamically_against_stale_token(): void
     {
         // 1. Admin grants explicit allow for leads.archive on web
-        Sanctum::actingAs($this->admin);
-        $this->putJson("/api/users/{$this->employee1->id}/permissions", [
-            'overrides' => [
-                ['permission' => 'leads.archive', 'effect' => 'allow'],
-            ],
-        ])->assertStatus(200);
+        $this->actingAsWeb($this->admin)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.archive', 'effect' => 'allow'],
+                ],
+            ])->assertStatus(200);
 
         $lead = $this->createLead('Enterprise Software Engineering', $this->employee1->id);
 
         // 2. Employee archives lead -> succeeds
-        Sanctum::actingAs($this->employee1);
+        $this->actingAsMobile($this->employee1);
         $archiveRes = $this->deleteJson("/api/leads/{$lead->id}");
         $archiveRes->assertStatus(200);
         $this->assertSoftDeleted('leads', ['id' => $lead->id]);
@@ -1081,15 +1121,15 @@ class PermissionManagementTest extends TestCase
         $lead->restore();
 
         // 3. Admin revokes leads.archive with DENY override on web
-        Sanctum::actingAs($this->admin);
-        $this->putJson("/api/users/{$this->employee1->id}/permissions", [
-            'overrides' => [
-                ['permission' => 'leads.archive', 'effect' => 'deny'],
-            ],
-        ])->assertStatus(200);
+        $this->actingAsWeb($this->admin)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.archive', 'effect' => 'deny'],
+                ],
+            ])->assertStatus(200);
 
         // 4. Employee immediately re-attempts archive (stale client state)
-        Sanctum::actingAs($this->employee1);
+        $this->actingAsMobile($this->employee1);
         $staleAttempt = $this->deleteJson("/api/leads/{$lead->id}");
 
         // Backend must dynamically reject with 403 Forbidden!
@@ -1142,5 +1182,309 @@ class PermissionManagementTest extends TestCase
         if ($leadId) {
             Lead::withTrashed()->find($leadId)?->forceDelete();
         }
+    }
+
+    /**
+     * Phase G.2.2 Web-Only RBAC Security Matrix Tests
+     */
+    public function test_g22_01_web_admin_with_valid_session_can_access_rbac(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->postJson('/api/auth/web-login', [
+                'email' => $this->admin->email,
+                'password' => 'Admin123',
+            ]);
+
+        $loginRes->assertStatus(200);
+        $this->assertNull($loginRes->json('token'));
+        $this->assertEquals('admin', $loginRes->json('user.role'));
+
+        $rolesRes = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/roles');
+
+        $rolesRes->assertStatus(200);
+        $this->assertNotEmpty($rolesRes->json());
+        $rolesRes->assertJsonStructure([
+            '*' => ['id', 'name', 'display_name', 'permission_names'],
+        ]);
+    }
+
+    public function test_g22_02_android_admin_with_mobile_token_receives_403(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Samsung SM-S918B',
+        ]);
+
+        $loginRes->assertStatus(200);
+        $token = $loginRes->json('token');
+        $this->assertNotEmpty($token);
+
+        $rolesRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/roles');
+
+        $rolesRes->assertStatus(403);
+        $rolesRes->assertJsonFragment([
+            'message' => 'Web-only RBAC administration: Personal access tokens cannot perform this action.',
+        ]);
+    }
+
+    public function test_g22_03_android_employee_with_mobile_token_receives_403(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->employee1->email,
+            'password' => 'Vistabound@2026',
+            'device_name' => 'Pixel 7',
+        ]);
+
+        $loginRes->assertStatus(200);
+        $token = $loginRes->json('token');
+        $this->assertNotEmpty($token);
+
+        $rolesRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/roles');
+
+        $rolesRes->assertStatus(403);
+    }
+
+    public function test_g22_04_unauthorized_web_employee_receives_403(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->postJson('/api/auth/web-login', [
+                'email' => $this->employee1->email,
+                'password' => 'Vistabound@2026',
+            ]);
+
+        $loginRes->assertStatus(200);
+
+        $rolesRes = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/roles');
+
+        $rolesRes->assertStatus(403);
+        $rolesRes->assertJsonFragment([
+            'message' => 'Unauthorized access.',
+        ]);
+    }
+
+    public function test_g22_05_android_admin_retains_normal_crm_functionality(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Samsung SM-S918B',
+        ]);
+        $token = $loginRes->json('token');
+
+        // Admin via mobile token can access normal CRM endpoints
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/leads')
+            ->assertStatus(200);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/follow-ups')
+            ->assertStatus(200);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/mobile/sync/pull')
+            ->assertStatus(200);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/dashboard/metrics')
+            ->assertStatus(200);
+    }
+
+    public function test_g22_06_web_admin_retains_normal_crm_functionality(): void
+    {
+        auth()->forgetGuards();
+
+        $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->postJson('/api/auth/web-login', [
+                'email' => $this->admin->email,
+                'password' => 'Admin123',
+            ])->assertStatus(200);
+
+        // Web session admin can access the same CRM endpoints
+        $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/leads')
+            ->assertStatus(200);
+
+        $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/follow-ups')
+            ->assertStatus(200);
+
+        $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/mobile/sync/pull')
+            ->assertStatus(200);
+
+        $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->getJson('/api/dashboard/metrics')
+            ->assertStatus(200);
+    }
+
+    public function test_g22_07_wildcard_personal_access_token_rejected_from_rbac(): void
+    {
+        auth()->forgetGuards();
+
+        // Create PAT with wildcard abilities for admin
+        $pat = $this->admin->createToken('admin-wildcard', ['*'])->plainTextToken;
+
+        $res = $this->withHeader('Authorization', 'Bearer ' . $pat)
+            ->getJson('/api/roles');
+
+        $res->assertStatus(403);
+        $res->assertJsonFragment([
+            'message' => 'Web-only RBAC administration: Personal access tokens cannot perform this action.',
+        ]);
+    }
+
+    public function test_g22_08_spoofed_client_channel_web_rejected(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        // Mobile token attempting to spoof ?client_channel=web
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/roles?client_channel=web');
+
+        $res->assertStatus(403);
+    }
+
+    public function test_g22_09_spoofed_x_platform_web_rejected(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        // Mobile token attempting to spoof X-Platform: web header
+        $res = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+            'X-Platform' => 'web',
+            'X-Client' => 'web-desk',
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        ])->getJson('/api/roles');
+
+        $res->assertStatus(403);
+    }
+
+    public function test_g22_10_rbac_mutations_protected_against_tokens(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        // 1. Mobile token attempt -> 403 Forbidden
+        $tokenRes = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.export', 'effect' => 'allow'],
+                ],
+            ]);
+        $tokenRes->assertStatus(403);
+
+        // 2. Web session attempt -> 200 OK
+        $webRes = $this->actingAsWeb($this->admin)
+            ->putJson("/api/users/{$this->employee1->id}/permissions", [
+                'overrides' => [
+                    ['permission' => 'leads.export', 'effect' => 'allow'],
+                ],
+            ]);
+        $webRes->assertStatus(200);
+
+        // Clean up
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+    }
+
+    public function test_g22_11_web_session_without_functional_permission_rejected(): void
+    {
+        auth()->forgetGuards();
+
+        $role = Role::first();
+
+        // Web session user with ordinary employee role (lacking roles.manage)
+        $res = $this->actingAsWeb($this->employee1)
+            ->putJson("/api/roles/{$role->id}", [
+                'display_name' => 'Unauthorized Role Rename',
+            ]);
+
+        $res->assertStatus(403);
+        $res->assertJsonFragment([
+            'message' => 'Unauthorized access.',
+        ]);
+    }
+
+    public function test_g22_12_web_and_android_login_logout_flows(): void
+    {
+        auth()->forgetGuards();
+
+        // 1. Web Desk Flow: login sets session, logout clears session
+        $webLogin = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->postJson('/api/auth/web-login', [
+                'email' => $this->admin->email,
+                'password' => 'Admin123',
+            ]);
+        $webLogin->assertStatus(200);
+        $this->assertNull($webLogin->json('token'));
+        $this->assertAuthenticatedAs($this->admin, 'web');
+
+        $webLogout = $this->withHeaders(['Referer' => 'http://localhost/'])
+            ->postJson('/api/auth/web-logout');
+        $webLogout->assertStatus(200);
+        $this->assertGuest('web');
+
+        // Reset test client state to simulate an isolated native mobile app
+        $this->flushSession();
+        $this->defaultCookies = [];
+        auth()->forgetGuards();
+
+        // 2. Android Mobile Flow: login issues scoped PAT, logout revokes token
+        $mobileLogin = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->employee1->email,
+            'password' => 'Vistabound@2026',
+            'device_name' => 'OnePlus 11',
+        ]);
+        $mobileLogin->assertStatus(200);
+        $token = $mobileLogin->json('token');
+        $this->assertNotEmpty($token);
+
+        // Verify token in database has scoped abilities (and no wildcard or rbac:manage)
+        $patModel = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+        $this->assertNotNull($patModel);
+        $this->assertNotContains('*', $patModel->abilities);
+        $this->assertNotContains('rbac:manage', $patModel->abilities);
+        $this->assertContains('mobile:access', $patModel->abilities);
+        $this->assertContains('leads:view', $patModel->abilities);
+
+        // Mobile logout revokes the token
+        $mobileLogout = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/auth/logout');
+        $mobileLogout->assertStatus(200);
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $patModel->id]);
     }
 }

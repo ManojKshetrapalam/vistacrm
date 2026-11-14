@@ -107,7 +107,7 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
-  if (authStore.token && !authStore.user) {
+  if (!authStore.user && (!Capacitor.isNativePlatform() || authStore.token)) {
     await authStore.fetchMe();
   }
 

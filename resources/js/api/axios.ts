@@ -27,12 +27,16 @@ const api = axios.create({
     'Accept': 'application/json',
   },
   timeout: 15000,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('vb_crm_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Mobile app uses Bearer personal access tokens; Web desk uses stateful session cookies
+  if (Capacitor.isNativePlatform()) {
+    const token = localStorage.getItem('vb_crm_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });

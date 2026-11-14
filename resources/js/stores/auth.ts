@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { Capacitor } from '@capacitor/core';
 import api from '../api/axios';
 
 export interface UserProfile {
@@ -36,7 +37,12 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   getters: {
-    isAuthenticated: (state) => !!state.token && !!state.user,
+    isAuthenticated: (state) => {
+      if (Capacitor.isNativePlatform()) {
+        return !!state.token && !!state.user;
+      }
+      return !!state.user;
+    },
     isAdmin: (state) => state.user?.role === 'admin' || state.user?.role_name === 'admin',
     isEmployee: (state) => state.user?.role !== 'admin' && state.user?.role_name !== 'admin',
     can: (state) => (permission: string): boolean => {
@@ -63,12 +69,27 @@ export const useAuthStore = defineStore('auth', {
           email: credentials.email || credentials.login,
           password: credentials.password,
         };
-        const response = await api.post('/auth/login', payload);
-        this.token = response.data.token;
-        this.user = response.data.user;
 
-        localStorage.setItem('vb_crm_token', this.token);
-        localStorage.setItem('vb_crm_user', JSON.stringify(this.user));
+        if (Capacitor.isNativePlatform()) {
+          // Native Android mobile login: Scoped Personal Access Token
+          const response = await api.post('/auth/mobile-login', payload);
+          this.token = response.data.token;
+          this.user = response.data.user;
+          localStorage.setItem('vb_crm_token', this.token);
+          localStorage.setItem('vb_crm_user', JSON.stringify(this.user));
+        } else {
+          // Web Desk login: Stateful browser session + CSRF cookie bootstrap
+          try {
+            await api.get('/sanctum/csrf-cookie');
+          } catch (csrfErr) {
+            console.warn('[auth] CSRF cookie bootstrap note:', csrfErr);
+          }
+          const response = await api.post('/auth/web-login', payload);
+          this.token = '';
+          this.user = response.data.user;
+          localStorage.removeItem('vb_crm_token');
+          localStorage.setItem('vb_crm_user', JSON.stringify(this.user));
+        }
 
         // Reset session flags on fresh login so briefing and active alerts appear
         try {
@@ -79,7 +100,7 @@ export const useAuthStore = defineStore('auth', {
         }
 
         await this.fetchMe();
-        return response.data;
+        return { user: this.user, token: this.token };
       } catch (err: any) {
         this.error = err.response?.data?.message || 'Login failed. Please check credentials.';
         throw err;
@@ -89,7 +110,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async fetchMe() {
-      if (!this.token) return;
+      if (Capacitor.isNativePlatform() && !this.token) return;
       try {
         const response = await api.get('/auth/me');
         this.user = response.data.user;
@@ -109,7 +130,11 @@ export const useAuthStore = defineStore('auth', {
 
     async logout() {
       try {
-        await api.post('/auth/logout');
+        if (Capacitor.isNativePlatform()) {
+          await api.post('/auth/logout');
+        } else {
+          await api.post('/auth/web-logout');
+        }
       } catch (err) {
         // ignore
       } finally {

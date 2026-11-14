@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('auth')->group(function () {
+    Route::post('/web-login', [AuthController::class, 'webLogin']);
+    Route::post('/mobile-login', [AuthController::class, 'mobileLogin']);
     Route::post('/login', [AuthController::class, 'login']);
 });
 
@@ -25,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
+        Route::post('/web-logout', [AuthController::class, 'webLogout']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 
@@ -88,24 +91,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/settings/templates/{template}', [SettingsController::class, 'updateTemplate']);
     Route::delete('/settings/templates/{template}', [SettingsController::class, 'deleteTemplate']);
 
-    // Roles & Granular Permissions
-    Route::get('/roles', [RolePermissionController::class, 'roles']);
-    Route::post('/roles', [RolePermissionController::class, 'storeRole']);
-    Route::put('/roles/{id}', [RolePermissionController::class, 'updateRole']);
-    Route::delete('/roles/{id}', [RolePermissionController::class, 'deleteRole']);
-    Route::get('/permissions', [RolePermissionController::class, 'permissions']);
-    Route::get('/teams', [RolePermissionController::class, 'teams']);
+    // Roles & Granular Permissions (Web Desk Only — Protected by EnsureWebDeskRbacSession)
+    Route::middleware('web.rbac')->group(function () {
+        Route::get('/roles', [RolePermissionController::class, 'roles']);
+        Route::post('/roles', [RolePermissionController::class, 'storeRole']);
+        Route::put('/roles/{id}', [RolePermissionController::class, 'updateRole']);
+        Route::delete('/roles/{id}', [RolePermissionController::class, 'deleteRole']);
+        Route::get('/permissions', [RolePermissionController::class, 'permissions']);
+        Route::get('/teams', [RolePermissionController::class, 'teams']);
 
-    // User-Level Overrides (Inherit / Allow / Deny Model)
-    Route::get('/users/{id}/permissions', [RolePermissionController::class, 'getUserPermissions']);
-    Route::match(['post', 'put'], '/users/{id}/permissions', [RolePermissionController::class, 'updateUserPermissions']);
-    Route::match(['post', 'put'], '/users/{id}/visibility', [RolePermissionController::class, 'updateUserVisibility']);
-    Route::match(['post', 'put'], '/users/{id}/categories', [RolePermissionController::class, 'updateUserCategories']);
-    Route::post('/users/{id}/permissions/reset', [RolePermissionController::class, 'resetUserPermissions']);
+        // User-Level Overrides (Inherit / Allow / Deny Model)
+        Route::get('/users/{id}/permissions', [RolePermissionController::class, 'getUserPermissions']);
+        Route::match(['post', 'put'], '/users/{id}/permissions', [RolePermissionController::class, 'updateUserPermissions']);
+        Route::match(['post', 'put'], '/users/{id}/visibility', [RolePermissionController::class, 'updateUserVisibility']);
+        Route::match(['post', 'put'], '/users/{id}/categories', [RolePermissionController::class, 'updateUserCategories']);
+        Route::post('/users/{id}/permissions/reset', [RolePermissionController::class, 'resetUserPermissions']);
 
-    // Permission Audit Logs
-    Route::get('/audit-logs', [RolePermissionController::class, 'auditLogs']);
-    Route::get('/permissions/audit-logs', [RolePermissionController::class, 'auditLogs']);
+        // Permission Audit Logs
+        Route::get('/audit-logs', [RolePermissionController::class, 'auditLogs']);
+        Route::get('/permissions/audit-logs', [RolePermissionController::class, 'auditLogs']);
+    });
 
     // Mobile Offline Sync & Device Push Tokens
     Route::prefix('mobile')->group(function () {

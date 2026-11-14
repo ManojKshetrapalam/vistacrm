@@ -14,7 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->statefulApi();
+        $middleware->alias([
+            'web.rbac' => \App\Http\Middleware\EnsureWebDeskRbacSession::class,
+        ]);
+        $middleware->validateCsrfTokens(except: [
+            'api/auth/mobile-login',
+            'api/auth/login',
+            'api/mobile/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

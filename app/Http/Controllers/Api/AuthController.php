@@ -7,12 +7,96 @@ use App\Models\NotificationLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
+    /**
+     * Dedicated Web Desk session login.
+     * Establishes a stateful Laravel browser session.
+     * Does NOT issue a Personal Access Token.
+     */
+    public function webLogin(Request $request): JsonResponse
+    {
+        $user = $this->validateCredentials($request);
+
+        // Establish stateful browser session
+        Auth::guard('web')->login($user, remember: true);
+        $request->session()->regenerate();
+
+        return response()->json([
+            'message' => 'Web desk session authenticated successfully',
+            'user' => $this->formatUserResponse($user),
+        ]);
+    }
+
+    /**
+     * Dedicated Android mobile login.
+     * Issues a scoped Sanctum Personal Access Token.
+     * Strictly omits 'rbac:manage' and wildcard '*'.
+     * Does NOT establish a web browser session.
+     */
+    public function mobileLogin(Request $request): JsonResponse
+    {
+        $user = $this->validateCredentials($request);
+
+        $abilities = [
+            'mobile:access',
+            'leads:view',
+            'leads:create',
+            'leads:edit',
+            'follow_ups:manage',
+            'whatsapp:send',
+            'mobile:sync',
+            'notifications:view',
+            'profile:manage',
+        ];
+
+        $token = $user->createToken('crm-mobile-session', $abilities)->plainTextToken;
+
+        return response()->json([
+            'message' => 'Mobile session authenticated successfully',
+            'token' => $token,
+            'user' => $this->formatUserResponse($user),
+        ]);
+    }
+
+    /**
+     * Standard/legacy login endpoint.
+     * Issues a scoped personal access token without creating a web session.
+     */
     public function login(Request $request): JsonResponse
+    {
+        $user = $this->validateCredentials($request);
+
+        $abilities = [
+            'mobile:access',
+            'leads:view',
+            'leads:create',
+            'leads:edit',
+            'follow_ups:manage',
+            'whatsapp:send',
+            'mobile:sync',
+            'notifications:view',
+            'profile:manage',
+        ];
+
+        $token = $user->createToken('crm-session', $abilities)->plainTextToken;
+
+        return response()->json([
+            'message' => 'Login successful',
+            'token' => $token,
+            'user' => $this->formatUserResponse($user),
+        ]);
+    }
+
+    /**
+     * Validate credentials and account status.
+     */
+    protected function validateCredentials(Request $request): User
     {
         $validated = $request->validate([
             'email' => 'nullable|string',
@@ -39,19 +123,12 @@ class AuthController extends Controller
         }
 
         if (!$user->is_active) {
-            return response()->json([
+            abort(response()->json([
                 'message' => 'Your account has been deactivated. Please contact your CRM administrator.',
-            ], 403);
+            ], 403));
         }
 
-        // Revoke prior tokens if desired or create a new token
-        $token = $user->createToken('crm-session')->plainTextToken;
-
-        return response()->json([
-            'message' => 'Login successful',
-            'token' => $token,
-            'user' => $this->formatUserResponse($user),
-        ]);
+        return $user;
     }
 
     public function me(Request $request): JsonResponse
@@ -128,9 +205,45 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Dedicated Web Desk logout.
+     * Invalidates the stateful web session.
+     */
+    public function webLogout(Request $request): JsonResponse
+    {
+        Auth::guard('web')->logout();
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return response()->json([
+            'message' => 'Successfully logged out of web desk',
+        ]);
+    }
+
+    /**
+     * Universal logout.
+     * Deletes personal access token if present, and invalidates web session if present.
+     */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        } elseif ($bearer = $request->bearerToken()) {
+            $pat = PersonalAccessToken::findToken($bearer);
+            $pat?->delete();
+        }
+
+        if (Auth::guard('web')->check()) {
+            Auth::guard('web')->logout();
+            if ($request->hasSession()) {
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
+        }
 
         return response()->json([
             'message' => 'Successfully logged out',

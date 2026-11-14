@@ -854,18 +854,17 @@ class PermissionManagementTest extends TestCase
      */
     public function test_sec05_employee_creation_and_updates_generate_immutable_audit_logs(): void
     {
-        $adminToken = $this->admin->createToken('admin-test')->plainTextToken;
+        $this->actingAsWeb($this->admin);
 
         // 1. Create Employee
         $empEmail = 'test_audit_emp_' . rand(1000, 9999) . '@example.com';
-        $createRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
-            ->postJson('/api/employees', [
-                'name' => 'Audit Test User',
-                'email' => $empEmail,
-                'password' => 'SecurePass123!',
-                'role' => 'employee',
-                'team_id' => $this->teamSales->id,
-            ]);
+        $createRes = $this->postJson('/api/employees', [
+            'name' => 'Audit Test User',
+            'email' => $empEmail,
+            'password' => 'SecurePass123!',
+            'role' => 'employee',
+            'team_id' => $this->teamSales->id,
+        ]);
 
         $createRes->assertStatus(201);
         $empId = $createRes->json('employee.id');
@@ -879,10 +878,9 @@ class PermissionManagementTest extends TestCase
 
         // 2. Update Role
         $managerRole = Role::where('name', 'sales_manager')->firstOrFail();
-        $updateRoleRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
-            ->putJson("/api/employees/{$empId}", [
-                'role_id' => $managerRole->id,
-            ]);
+        $updateRoleRes = $this->putJson("/api/employees/{$empId}", [
+            'role_id' => $managerRole->id,
+        ]);
 
         $updateRoleRes->assertStatus(200);
 
@@ -894,10 +892,9 @@ class PermissionManagementTest extends TestCase
         ]);
 
         // 3. Update Team
-        $updateTeamRes = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
-            ->putJson("/api/employees/{$empId}", [
-                'team_id' => $this->teamRetail->id,
-            ]);
+        $updateTeamRes = $this->putJson("/api/employees/{$empId}", [
+            'team_id' => $this->teamRetail->id,
+        ]);
 
         $updateTeamRes->assertStatus(200);
 
@@ -1486,5 +1483,400 @@ class PermissionManagementTest extends TestCase
             ->postJson('/api/auth/logout');
         $mobileLogout->assertStatus(200);
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $patModel->id]);
+    }
+
+    /**
+     * Phase G.2.3 Tests: Web-Only Authorization-Affecting Employee Operations (GAP-01 Remediation)
+     */
+    public function test_g23_01_android_admin_pat_cannot_assign_or_change_employee_role(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $customRole = Role::create([
+            'name' => 'custom_rep_' . rand(1000, 9999),
+            'display_name' => 'Custom Rep',
+            'description' => 'Test role',
+            'is_system' => false,
+        ]);
+
+        $originalRoleId = $this->employee1->role_id;
+
+        // 1. Mobile PAT attempts to change employee's role_id -> 403 Forbidden
+        $resUpdate = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'role_id' => $customRole->id,
+            ]);
+
+        $resUpdate->assertStatus(403);
+        $resUpdate->assertJsonFragment([
+            'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+        ]);
+        $this->assertEquals($originalRoleId, $this->employee1->fresh()->role_id);
+
+        // 2. Mobile PAT attempts to create an employee with privileged role -> 403 Forbidden
+        $resCreate = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/employees', [
+                'name' => 'PAT Created Rep',
+                'email' => 'pat_rep_' . rand(1000, 9999) . '@example.com',
+                'password' => 'Vistabound@2026',
+                'role_id' => $customRole->id,
+            ]);
+
+        $resCreate->assertStatus(403);
+        $resCreate->assertJsonFragment([
+            'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+        ]);
+
+        $customRole->delete();
+    }
+
+    public function test_g23_02_android_admin_pat_cannot_reassign_or_remove_employee_team(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $originalTeamId = $this->employee1->team_id;
+        $targetTeam = $this->teamRetail;
+
+        // 1. Mobile PAT attempts team reassignment -> 403 Forbidden
+        $resReassign = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'team_id' => $targetTeam->id,
+            ]);
+
+        $resReassign->assertStatus(403);
+        $resReassign->assertJsonFragment([
+            'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+        ]);
+        $this->assertEquals($originalTeamId, $this->employee1->fresh()->team_id);
+
+        // 2. Mobile PAT attempts team removal (null) -> 403 Forbidden
+        $resRemove = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'team_id' => null,
+            ]);
+
+        $resRemove->assertStatus(403);
+        $resRemove->assertJsonFragment([
+            'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+        ]);
+        $this->assertEquals($originalTeamId, $this->employee1->fresh()->team_id);
+    }
+
+    public function test_g23_03_web_admin_can_perform_authorized_role_assignment_and_removal(): void
+    {
+        auth()->forgetGuards();
+
+        $customRole = Role::create([
+            'name' => 'custom_desk_rep_' . rand(1000, 9999),
+            'display_name' => 'Custom Desk Rep',
+            'description' => 'Test role',
+            'is_system' => false,
+        ]);
+
+        // 1. Web Desk Admin assigns new role -> 200 OK
+        $resAssign = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'role_id' => $customRole->id,
+            ]);
+
+        $resAssign->assertStatus(200);
+        $this->assertEquals($customRole->id, $this->employee1->fresh()->role_id);
+
+        // 2. Web Desk Admin explicitly removes role (null) -> 200 OK
+        $resRemove = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'role_id' => null,
+            ]);
+
+        $resRemove->assertStatus(200);
+        $this->assertNull($this->employee1->fresh()->role_id);
+        $this->assertEquals('employee', $this->employee1->fresh()->role);
+
+        $customRole->delete();
+    }
+
+    public function test_g23_04_web_admin_can_perform_authorized_team_assignment_and_removal(): void
+    {
+        auth()->forgetGuards();
+
+        // 1. Web Desk Admin assigns employee to teamRetail -> 200 OK
+        $resAssign = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'team_id' => $this->teamRetail->id,
+            ]);
+
+        $resAssign->assertStatus(200);
+        $this->assertEquals($this->teamRetail->id, $this->employee1->fresh()->team_id);
+
+        // 2. Web Desk Admin explicitly removes employee from team (null) -> 200 OK
+        $resRemove = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'team_id' => null,
+            ]);
+
+        $resRemove->assertStatus(200);
+        $this->assertNull($this->employee1->fresh()->team_id);
+    }
+
+    public function test_g23_05_ordinary_permitted_employee_profile_updates_continue_to_work_via_pat_and_web(): void
+    {
+        auth()->forgetGuards();
+
+        // 1. Mobile PAT updates profile fields (with role_id and team_id matching current or omitted)
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $newPhone = '+919988776655';
+        $resMobile = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'phone' => $newPhone,
+                'role_id' => $this->employee1->role_id, // Unchanged
+                'team_id' => $this->employee1->team_id, // Unchanged
+            ]);
+
+        $resMobile->assertStatus(200);
+        $this->assertEquals($newPhone, $this->employee1->fresh()->phone);
+
+        // 2. Web Desk updates profile fields
+        $newName = 'Ananya Sharma Updated';
+        $resWeb = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'name' => $newName,
+            ]);
+
+        $resWeb->assertStatus(200);
+        $this->assertEquals($newName, $this->employee1->fresh()->name);
+    }
+
+    public function test_g23_06_unauthorized_web_employee_cannot_change_authorization_affecting_fields(): void
+    {
+        auth()->forgetGuards();
+
+        // Grant employee1 the functional permission 'employees.manage' ONLY, without 'roles.manage'
+        $empManagePerm = Permission::where('name', 'employees.manage')->firstOrFail();
+        DB::table('user_has_permissions')->updateOrInsert(
+            ['user_id' => $this->employee1->id, 'permission_id' => $empManagePerm->id],
+            ['effect' => 'allow', 'granted_by' => $this->admin->id, 'created_at' => now(), 'updated_at' => now()]
+        );
+        $this->employee1->refresh();
+
+        // Verify user has employees.manage but NOT roles.manage
+        $this->assertTrue($this->employee1->hasPermission('employees.manage'));
+        $this->assertFalse($this->employee1->hasPermission('roles.manage'));
+
+        // 1. Ordinary permitted employee attempts to change employee2's role_id on Web Desk -> 403 Forbidden
+        $resRole = $this->actingAsWeb($this->employee1)
+            ->putJson("/api/employees/{$this->employee2->id}", [
+                'role_id' => 1,
+            ]);
+
+        $resRole->assertStatus(403);
+        $resRole->assertJsonFragment([
+            'error_code' => 'INSUFFICIENT_PERMISSIONS',
+        ]);
+
+        // 2. Ordinary permitted employee attempts to change employee2's team_id on Web Desk -> 403 Forbidden
+        $resTeam = $this->actingAsWeb($this->employee1)
+            ->putJson("/api/employees/{$this->employee2->id}", [
+                'team_id' => $this->teamRetail->id,
+            ]);
+
+        $resTeam->assertStatus(403);
+        $resTeam->assertJsonFragment([
+            'error_code' => 'INSUFFICIENT_PERMISSIONS',
+        ]);
+
+        // 3. But permitted employee CAN update profile-only fields (name/phone) on Web Desk -> 200 OK
+        $resProfile = $this->actingAsWeb($this->employee1)
+            ->putJson("/api/employees/{$this->employee2->id}", [
+                'name' => 'Rohit Verma Directory Edit',
+            ]);
+
+        $resProfile->assertStatus(200);
+        $this->assertEquals('Rohit Verma Directory Edit', $this->employee2->fresh()->name);
+
+        DB::table('user_has_permissions')->where('user_id', $this->employee1->id)->delete();
+    }
+
+    public function test_g23_07_tenant_isolation_remains_enforced(): void
+    {
+        auth()->forgetGuards();
+
+        // Ordinary employee without employees.manage is rejected from directory
+        $this->assertFalse($this->employee2->hasPermission('employees.manage'));
+
+        $this->actingAsWeb($this->employee2)
+            ->getJson('/api/employees')
+            ->assertStatus(403);
+
+        $this->actingAsWeb($this->employee2)
+            ->putJson("/api/employees/{$this->employee1->id}", ['name' => 'Unauthorized'])
+            ->assertStatus(403);
+    }
+
+    public function test_g23_08_audit_entries_generated_for_successful_authorization_changes(): void
+    {
+        auth()->forgetGuards();
+
+        $customRole = Role::create([
+            'name' => 'audit_test_role_' . rand(1000, 9999),
+            'display_name' => 'Audit Test Role',
+            'is_system' => false,
+        ]);
+
+        // Web admin changes role and team
+        $res = $this->actingAsWeb($this->admin)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'role_id' => $customRole->id,
+                'team_id' => $this->teamRetail->id,
+            ]);
+
+        $res->assertStatus(200);
+
+        // Verify audit logs exist
+        $this->assertDatabaseHas('permission_audit_logs', [
+            'actor_id' => $this->admin->id,
+            'target_type' => 'user',
+            'target_id' => $this->employee1->id,
+            'action' => 'employee_role_changed',
+        ]);
+
+        $this->assertDatabaseHas('permission_audit_logs', [
+            'actor_id' => $this->admin->id,
+            'target_type' => 'user',
+            'target_id' => $this->employee1->id,
+            'action' => 'employee_team_changed',
+        ]);
+
+        $customRole->delete();
+    }
+
+    public function test_g23_09_failed_operations_do_not_leave_partial_database_changes(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $originalName = $this->employee1->name;
+        $originalRoleId = $this->employee1->role_id;
+
+        // Attacker attempts mixed request: change name AND change role via mobile PAT
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'name' => 'Tampered Hacker Name',
+                'role_id' => 1, // Admin role
+            ]);
+
+        $res->assertStatus(403);
+
+        // Assert database is 100% UNCHANGED (neither name nor role was altered)
+        $freshUser = $this->employee1->fresh();
+        $this->assertEquals($originalName, $freshUser->name);
+        $this->assertEquals($originalRoleId, $freshUser->role_id);
+    }
+
+    public function test_g23_10_numeric_string_vs_integer_id_comparison_does_not_trigger_false_authorization_check(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        // Employee currently has integer IDs
+        $currentRoleId = (string) $this->employee1->role_id;
+        $currentTeamId = (string) $this->employee1->team_id;
+
+        // Form submits identical values as numeric strings along with updated phone number
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'phone' => '+919911223344',
+                'role_id' => $currentRoleId, // Numeric string e.g. "2"
+                'team_id' => $currentTeamId, // Numeric string e.g. "1"
+            ]);
+
+        $res->assertStatus(200);
+        $this->assertEquals('+919911223344', $this->employee1->fresh()->phone);
+    }
+
+    public function test_g23_11_role_escalation_through_legacy_role_field_is_blocked(): void
+    {
+        auth()->forgetGuards();
+
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $this->assertEquals('employee', $this->employee1->role);
+
+        // Attempt privilege escalation via legacy 'role' slug
+        $res = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson("/api/employees/{$this->employee1->id}", [
+                'role' => 'admin',
+            ]);
+
+        $res->assertStatus(403);
+        $this->assertEquals('employee', $this->employee1->fresh()->role);
+    }
+
+    public function test_g23_12_employee_creation_without_privileged_role_succeeds_under_employees_manage(): void
+    {
+        auth()->forgetGuards();
+
+        // Mobile PAT creates unprivileged employee without role/team assignment -> 201 Created
+        $loginRes = $this->postJson('/api/auth/mobile-login', [
+            'email' => $this->admin->email,
+            'password' => 'Admin123',
+            'device_name' => 'Pixel 7',
+        ]);
+        $token = $loginRes->json('token');
+
+        $email = 'unprivileged_' . rand(1000, 9999) . '@example.com';
+        $resMobile = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/employees', [
+                'name' => 'Standard Rep Unprivileged',
+                'email' => $email,
+                'password' => 'Vistabound@2026',
+            ]);
+
+        $resMobile->assertStatus(201);
+        $newId = $resMobile->json('employee.id');
+        $this->assertNotNull($newId);
+
+        $createdEmp = User::find($newId);
+        $this->assertEquals('employee', $createdEmp->role);
+        $this->assertNull($createdEmp->role_id);
+        $this->assertNull($createdEmp->team_id);
+
+        $createdEmp->delete();
     }
 }

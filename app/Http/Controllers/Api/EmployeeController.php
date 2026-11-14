@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureWebDeskRbacSession;
 use App\Models\DeviceToken;
 use App\Models\FollowUp;
 use App\Models\Lead;
@@ -84,28 +85,64 @@ class EmployeeController extends Controller
             'team_id' => 'nullable|exists:teams,id',
         ]);
 
-        $roleString = $validated['role'] ?? 'employee';
-        $roleId = $validated['role_id'] ?? null;
+        $submittedRoleId = (array_key_exists('role_id', $validated) && $validated['role_id'] !== null && $validated['role_id'] !== '')
+            ? (int) $validated['role_id']
+            : null;
+        $submittedRole = (array_key_exists('role', $validated) && !empty($validated['role']))
+            ? trim((string) $validated['role'])
+            : null;
+        $submittedTeamId = (array_key_exists('team_id', $validated) && $validated['team_id'] !== null && $validated['team_id'] !== '')
+            ? (int) $validated['team_id']
+            : null;
 
-        if ($roleId) {
-            $roleModel = \App\Models\Role::find($roleId);
-            if ($roleModel) {
-                $roleString = $roleModel->name === 'admin' ? 'admin' : 'employee';
-            }
-        } elseif ($roleString) {
-            $roleModel = \App\Models\Role::where('name', $roleString)->first();
-            $roleId = $roleModel?->id;
+        // Resolve role template from DB
+        $roleModel = null;
+        if ($submittedRoleId !== null) {
+            $roleModel = \App\Models\Role::find($submittedRoleId);
+        } elseif ($submittedRole !== null) {
+            $roleModel = \App\Models\Role::where('name', $submittedRole)->first();
         }
 
-        $employee = DB::transaction(function () use ($validated, $user, $roleString, $roleId, $request) {
+        $effectiveRoleString = 'employee';
+        $effectiveRoleId = null;
+        if ($roleModel) {
+            $effectiveRoleId = $roleModel->id;
+            $effectiveRoleString = $roleModel->name === 'admin' ? 'admin' : 'employee';
+        } elseif ($submittedRole === 'admin') {
+            $effectiveRoleString = 'admin';
+        }
+
+        // Determine if privileged role or team assignment is being attempted
+        $isPrivilegedRole = ($effectiveRoleId !== null) || ($effectiveRoleString === 'admin');
+        $isTeamAssigned = ($submittedTeamId !== null);
+
+        if ($isPrivilegedRole || $isTeamAssigned) {
+            // 1. Require authentic Web Desk session
+            if (!EnsureWebDeskRbacSession::isWebDeskSession($request)) {
+                return response()->json([
+                    'message' => 'Web-only authorization administration: Assigning employee roles or teams requires an active Web Desk browser session.',
+                    'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+                ], 403);
+            }
+
+            // 2. Require administrator or 'roles.manage' permission
+            if (!$user->isAdmin() && !$user->hasPermission('roles.manage')) {
+                return response()->json([
+                    'message' => 'Unauthorized. You lack permission to assign employee roles or teams.',
+                    'error_code' => 'INSUFFICIENT_PERMISSIONS',
+                ], 403);
+            }
+        }
+
+        $employee = DB::transaction(function () use ($validated, $user, $effectiveRoleString, $effectiveRoleId, $submittedTeamId, $request) {
             $emp = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'phone' => $validated['phone'] ?? null,
                 'password' => Hash::make($validated['password']),
-                'role' => $roleString,
-                'role_id' => $roleId,
-                'team_id' => $validated['team_id'] ?? null,
+                'role' => $effectiveRoleString,
+                'role_id' => $effectiveRoleId,
+                'team_id' => $submittedTeamId,
                 'is_active' => true,
                 'notification_preferences' => [
                     'whatsapp_enabled' => true,
@@ -159,33 +196,72 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
         }
 
-        $oldRoleId = $user->role_id;
-        $oldRole = $user->role;
-        $oldTeamId = $user->team_id;
+        $currentRoleId = $user->role_id !== null ? (int) $user->role_id : null;
+        $currentRole = !empty($user->role) ? trim((string) $user->role) : 'employee';
+        $currentTeamId = $user->team_id !== null ? (int) $user->team_id : null;
 
-        $newRoleId = $oldRoleId;
-        $newRole = $oldRole;
-        if (array_key_exists('role_id', $validated)) {
-            $newRoleId = $validated['role_id'];
-            if ($validated['role_id']) {
-                $roleModel = \App\Models\Role::find($validated['role_id']);
+        // Normalize submitted values
+        $newRoleId = $currentRoleId;
+        $newRole = $currentRole;
+        $roleIdExplicitlySubmitted = array_key_exists('role_id', $validated);
+        $roleExplicitlySubmitted = array_key_exists('role', $validated);
+
+        if ($roleIdExplicitlySubmitted) {
+            $submittedRoleId = ($validated['role_id'] !== null && $validated['role_id'] !== '')
+                ? (int) $validated['role_id']
+                : null;
+            $newRoleId = $submittedRoleId;
+
+            if ($submittedRoleId !== null) {
+                $roleModel = \App\Models\Role::find($submittedRoleId);
                 if ($roleModel) {
                     $newRole = $roleModel->name === 'admin' ? 'admin' : 'employee';
                 }
+            } else {
+                // Explicit role removal reverts to base employee role
+                $newRole = 'employee';
             }
-        } elseif (!empty($validated['role'])) {
-            $newRole = $validated['role'];
-            $roleModel = \App\Models\Role::where('name', $validated['role'])->first();
-            if ($roleModel) {
-                $newRoleId = $roleModel->id;
+        } elseif ($roleExplicitlySubmitted) {
+            $submittedRole = !empty($validated['role']) ? trim((string) $validated['role']) : 'employee';
+            $newRole = $submittedRole;
+            $roleModel = \App\Models\Role::where('name', $submittedRole)->first();
+            $newRoleId = $roleModel?->id;
+        }
+
+        $teamExplicitlySubmitted = array_key_exists('team_id', $validated);
+        $newTeamId = $currentTeamId;
+        if ($teamExplicitlySubmitted) {
+            $newTeamId = ($validated['team_id'] !== null && $validated['team_id'] !== '')
+                ? (int) $validated['team_id']
+                : null;
+        }
+
+        // Detect actual authorization-affecting changes
+        $roleChanging = ($newRoleId !== $currentRoleId) || ($newRole !== $currentRole);
+        $teamChanging = ($newTeamId !== $currentTeamId);
+
+        if ($roleChanging || $teamChanging) {
+            // 1. Require authentic Web Desk session
+            if (!EnsureWebDeskRbacSession::isWebDeskSession($request)) {
+                return response()->json([
+                    'message' => 'Web-only authorization administration: Reassigning employee roles or teams requires an active Web Desk browser session.',
+                    'error_code' => 'MOBILE_RBAC_FORBIDDEN',
+                ], 403);
+            }
+
+            // 2. Require administrator or 'roles.manage' permission
+            if (!$currentUser->isAdmin() && !$currentUser->hasPermission('roles.manage')) {
+                return response()->json([
+                    'message' => 'Unauthorized. You lack permission to reassign employee roles or teams.',
+                    'error_code' => 'INSUFFICIENT_PERMISSIONS',
+                ], 403);
             }
         }
 
-        $newTeamId = array_key_exists('team_id', $validated) ? $validated['team_id'] : $oldTeamId;
-
         DB::transaction(function () use (
             $user, $validated, $currentUser, $request,
-            $oldRoleId, $newRoleId, $oldRole, $newRole, $oldTeamId, $newTeamId
+            $currentRoleId, $newRoleId, $currentRole, $newRole, $currentTeamId, $newTeamId,
+            $roleChanging, $teamChanging
         ) {
             if (!empty($validated['name'])) {
                 $user->name = $validated['name'];
@@ -210,31 +286,31 @@ class EmployeeController extends Controller
 
             $user->save();
 
-            // Record audit logs for actual changes (SEC-05)
-            if ($newRoleId != $oldRoleId || $newRole !== $oldRole) {
+            // Record audit logs for actual changes in same transaction
+            if ($roleChanging) {
                 PermissionAuditLog::record(
                     $currentUser->id,
                     'user',
                     $user->id,
                     'employee_role_changed',
                     [
-                        'old_role' => $oldRole,
+                        'old_role' => $currentRole,
                         'new_role' => $newRole,
-                        'old_role_id' => $oldRoleId,
+                        'old_role_id' => $currentRoleId,
                         'new_role_id' => $newRoleId,
                     ],
                     $request->ip()
                 );
             }
 
-            if ($newTeamId != $oldTeamId) {
+            if ($teamChanging) {
                 PermissionAuditLog::record(
                     $currentUser->id,
                     'user',
                     $user->id,
                     'employee_team_changed',
                     [
-                        'old_team_id' => $oldTeamId,
+                        'old_team_id' => $currentTeamId,
                         'new_team_id' => $newTeamId,
                     ],
                     $request->ip()
@@ -244,7 +320,7 @@ class EmployeeController extends Controller
 
         return response()->json([
             'message' => 'Employee updated successfully',
-            'employee' => $user,
+            'employee' => $user->fresh(['roleRelation', 'team']),
         ]);
     }
 

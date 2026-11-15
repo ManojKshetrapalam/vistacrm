@@ -306,6 +306,11 @@ tar -xzf /home/u996219523/.dbdumps/crm-app-backup-20261027_065926.tar.gz
   cd android && ./gradlew assembleRelease bundleRelease
   ```
 - **Release Artifacts:**
+  - Master Auto-Updating APK (v1.0.2): [`release/Vistabound-CRM-v1.0.2-Master-AutoUpdate.apk`](file:///e:/Projects/vistacrm/release/Vistabound-CRM-v1.0.2-Master-AutoUpdate.apk)
+    - Version Code: `3` | Version Name: `1.0.2`
+    - Live Download: `https://vistaboundintegrated.com/CRM/ota/Vistabound-CRM-v1.0.2-Master-AutoUpdate.apk`
+    - Feature: Self-Hosted Over-The-Air (OTA) Live Updates via `@capgo/capacitor-updater`
+    - Future frontend UI/workflow changes require **zero APK reinstalls**
   - Production Release APK (v1.0.1): [`release/Vistabound-CRM-v1.0.1-production.apk`](file:///Users/manojkumar/27octvicrm/release/Vistabound-CRM-v1.0.1-production.apk)
     - Version Code: `2` | Version Name: `1.0.1`
     - SHA-256: `e4fdf2c062d692d4fc2ab29949881050f95c1ead53f36b47cee4f99b55392c2e`

@@ -1,29 +1,29 @@
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+    class="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
     @click.self="close"
   >
     <div
-      class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-vb-plum/10 animate-in zoom-in-95 duration-150 my-8"
+      class="glass-elevated max-w-xl w-full overflow-hidden border border-white/15 shadow-2xl animate-in zoom-in-95 duration-150 my-8"
       role="dialog"
       aria-modal="true"
     >
       <!-- Header -->
-      <div class="p-5 border-b border-vb-plum/10 flex items-center justify-between bg-vb-cream/50">
+      <div class="p-5 border-b border-white/10 flex items-center justify-between bg-white/[0.04] backdrop-blur-md">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-vb-plum text-white flex items-center justify-center shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white flex items-center justify-center shadow-sm border border-white/20">
             <Edit class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="font-display font-bold text-base text-vb-plum">Edit Lead Profile</h3>
-            <p class="text-xs text-vb-muted font-mono font-medium">{{ lead?.reference_id }} · {{ lead?.name }}</p>
+            <h3 class="font-display font-bold text-base text-white">Edit Lead Profile</h3>
+            <p class="text-xs text-purple-200/70 font-mono font-medium">{{ lead?.reference_id }} · {{ lead?.name }}</p>
           </div>
         </div>
         <button
           type="button"
           @click="close"
-          class="p-1 rounded-lg text-vb-muted hover:text-vb-plum hover:bg-vb-plum/5 transition-colors"
+          class="p-1.5 rounded-lg text-purple-300 hover:text-white hover:bg-white/10 transition-colors"
         >
           <X class="w-5 h-5" />
         </button>
@@ -34,8 +34,8 @@
         <div class="grid sm:grid-cols-2 gap-4">
           <!-- Name -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-              Contact Name <span class="text-rose-500">*</span>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+              Contact Name <span class="text-rose-400">*</span>
             </label>
             <input
               v-model="form.name"
@@ -48,8 +48,8 @@
 
           <!-- Phone -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-              Mobile / Phone <span class="text-rose-500">*</span>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+              Mobile / Phone <span class="text-rose-400">*</span>
             </label>
             <input
               v-model="form.phone"
@@ -64,7 +64,7 @@
         <div class="grid sm:grid-cols-2 gap-4">
           <!-- Email -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Email Address
             </label>
             <input
@@ -77,7 +77,7 @@
 
           <!-- Company -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Company Name
             </label>
             <input
@@ -92,7 +92,7 @@
         <div class="grid sm:grid-cols-2 gap-4">
           <!-- Status -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Pipeline Status
             </label>
             <select v-model="form.status" class="field text-xs">
@@ -109,7 +109,7 @@
 
           <!-- Priority -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Priority
             </label>
             <select v-model="form.priority" class="field text-xs">
@@ -124,7 +124,7 @@
         <div class="grid sm:grid-cols-2 gap-4">
           <!-- Source -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Lead Source
             </label>
             <input
@@ -137,7 +137,7 @@
 
           <!-- Service Interest -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Service Interest
             </label>
             <input
@@ -151,7 +151,7 @@
 
         <!-- Additional Scope / Details -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
             Scope &amp; Background Notes
           </label>
           <textarea
@@ -163,17 +163,17 @@
         </div>
 
         <!-- Error Msg -->
-        <p v-if="error" class="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+        <p v-if="error" class="text-xs text-rose-300 bg-rose-500/20 p-2.5 rounded-xl border border-rose-500/40">
           {{ error }}
         </p>
 
         <!-- Footer -->
-        <div class="pt-4 border-t border-vb-plum/10 flex items-center justify-end gap-2.5">
+        <div class="pt-4 border-t border-white/10 flex items-center justify-end gap-2.5">
           <button
             type="button"
             @click="close"
             :disabled="submitting"
-            class="px-4 py-2 text-xs font-semibold text-vb-plum hover:bg-vb-plum/5 rounded-full transition-colors disabled:opacity-50"
+            class="px-4 py-2 text-xs font-semibold text-purple-200/70 hover:text-white rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

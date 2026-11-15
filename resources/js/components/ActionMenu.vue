@@ -3,7 +3,7 @@
     <button
       type="button"
       @click.stop="toggleMenu"
-      :class="triggerClass || 'p-1.5 rounded-lg text-vb-muted hover:text-vb-plum hover:bg-vb-cream/80 border border-transparent hover:border-vb-plum/10 transition-all focus:outline-none focus:ring-2 focus:ring-vb-violet/30'"
+      :class="triggerClass || 'p-1.5 rounded-xl text-purple-200/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-vb-magenta/40 shadow-none'"
       :aria-expanded="isOpen"
       :aria-label="ariaLabel || 'Actions menu'"
       :title="title || 'Actions'"
@@ -14,32 +14,32 @@
     </button>
 
     <transition
-      enter-active-class="transition duration-100 ease-out"
+      enter-active-class="transition duration-150 ease-out"
       enter-from-class="transform scale-95 opacity-0"
       enter-to-class="transform scale-100 opacity-100"
-      leave-active-class="transition duration-75 ease-in"
+      leave-active-class="transition duration-100 ease-in"
       leave-from-class="transform scale-100 opacity-100"
       leave-to-class="transform scale-95 opacity-0"
     >
       <div
         v-if="isOpen"
-        class="absolute z-40 mt-1 min-w-[180px] w-max max-w-xs rounded-xl bg-white shadow-xl border border-vb-plum/10 py-1.5 focus:outline-none overflow-hidden"
+        class="absolute z-40 mt-1 min-w-[190px] w-max max-w-xs rounded-2xl glass-elevated border border-white/15 shadow-2xl py-1.5 focus:outline-none overflow-hidden"
         :class="align === 'left' ? 'left-0 origin-top-left' : 'right-0 origin-top-right'"
         role="menu"
       >
         <template v-for="(item, idx) in visibleItems" :key="idx">
           <!-- Divider -->
-          <div v-if="item.divider" class="my-1 border-t border-vb-plum/10" role="separator"></div>
+          <div v-if="item.divider" class="my-1 border-t border-white/10" role="separator"></div>
 
           <!-- Router Link Action -->
           <router-link
             v-else-if="item.to"
             :to="item.to"
             @click="closeMenu"
-            class="flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-vb-ink hover:bg-vb-cream/60 hover:text-vb-plum transition-colors"
+            class="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-white/90 hover:bg-white/10 hover:text-white transition-colors"
             role="menuitem"
           >
-            <component :is="item.icon" class="w-4 h-4 text-vb-muted shrink-0" />
+            <component :is="item.icon" class="w-4 h-4 text-purple-300 shrink-0" />
             <span class="truncate">{{ item.label }}</span>
           </router-link>
 
@@ -49,20 +49,20 @@
             type="button"
             :disabled="item.disabled"
             @click.stop="handleAction(item)"
-            class="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-left font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-left font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             :class="[
               item.danger
-                ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                ? 'text-rose-400 hover:bg-rose-500/20 hover:text-rose-300'
                 : item.warning
-                ? 'text-amber-700 hover:bg-amber-50'
-                : 'text-vb-ink hover:bg-vb-cream/60 hover:text-vb-plum'
+                ? 'text-amber-400 hover:bg-amber-500/20 hover:text-amber-300'
+                : 'text-white/90 hover:bg-white/10 hover:text-white'
             ]"
             role="menuitem"
           >
             <component
               :is="item.icon"
               class="w-4 h-4 shrink-0"
-              :class="item.danger ? 'text-rose-500' : item.warning ? 'text-amber-600' : 'text-vb-muted'"
+              :class="item.danger ? 'text-rose-400' : item.warning ? 'text-amber-400' : 'text-purple-300'"
             />
             <span class="truncate">{{ item.label }}</span>
           </button>

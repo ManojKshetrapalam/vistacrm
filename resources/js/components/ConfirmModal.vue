@@ -1,40 +1,40 @@
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+    class="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
     @click.self="handleCancel"
   >
     <div
-      class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-vb-plum/10 animate-in zoom-in-95 duration-150"
+      class="glass-elevated max-w-md w-full overflow-hidden border border-white/15 shadow-2xl animate-in zoom-in-95 duration-150"
       role="dialog"
       aria-modal="true"
     >
       <!-- Header -->
-      <div class="p-5 border-b border-vb-plum/10 flex items-start gap-3.5 bg-vb-cream/40">
+      <div class="p-5 border-b border-white/10 flex items-start gap-3.5 bg-white/[0.04] backdrop-blur-md">
         <div
-          class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+          class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs border"
           :class="[
             variant === 'danger'
-              ? 'bg-rose-100 text-rose-600'
+              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
               : variant === 'warning'
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-vb-violet/10 text-vb-violet'
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+              : 'bg-vb-magenta/20 text-purple-200 border-vb-magenta/30'
           ]"
         >
           <component :is="iconComponent" class="w-5 h-5" />
         </div>
         <div class="flex-1 pr-6">
-          <h3 class="font-display font-bold text-base text-vb-plum leading-snug">
+          <h3 class="font-display font-bold text-base text-white leading-snug">
             {{ title }}
           </h3>
-          <p v-if="subtitle" class="text-xs text-vb-muted mt-0.5 font-medium">
+          <p v-if="subtitle" class="text-xs text-purple-200/70 mt-0.5 font-medium">
             {{ subtitle }}
           </p>
         </div>
         <button
           type="button"
           @click="handleCancel"
-          class="p-1 rounded-lg text-vb-muted hover:text-vb-plum hover:bg-vb-plum/5 transition-colors"
+          class="p-1.5 rounded-lg text-purple-300 hover:text-white hover:bg-white/10 transition-colors"
           aria-label="Close dialog"
         >
           <X class="w-4 h-4" />
@@ -43,7 +43,7 @@
 
       <!-- Content Body -->
       <div class="p-6 space-y-4">
-        <p class="text-xs text-vb-ink leading-relaxed">
+        <p class="text-xs text-purple-200/90 leading-relaxed">
           {{ message }}
         </p>
 
@@ -53,10 +53,10 @@
           class="p-3.5 rounded-xl border text-xs space-y-1"
           :class="[
             variant === 'danger'
-              ? 'bg-rose-50/70 border-rose-200/80 text-rose-900'
+              ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
               : variant === 'warning'
-              ? 'bg-amber-50/70 border-amber-200/80 text-amber-900'
-              : 'bg-vb-cream border-vb-plum/10 text-vb-plum'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+              : 'bg-white/[0.06] border-white/10 text-purple-200'
           ]"
         >
           <span class="font-bold block text-[11px] uppercase tracking-wider">
@@ -67,10 +67,10 @@
           </p>
         </div>
 
-        <!-- Strict Confirmation Input (e.g. typing reference_id or name for permanent delete) -->
+        <!-- Strict Confirmation Input -->
         <div v-if="requiredConfirmationText" class="space-y-1.5 pt-1">
-          <label class="block text-xs font-semibold text-vb-plum">
-            Please type <span class="font-mono font-bold text-rose-600 select-all">{{ requiredConfirmationText }}</span> to confirm:
+          <label class="block text-xs font-semibold text-purple-200">
+            Please type <span class="font-mono font-bold text-rose-400 select-all">{{ requiredConfirmationText }}</span> to confirm:
           </label>
           <input
             v-model="inputConfirmationText"
@@ -83,18 +83,18 @@
         </div>
 
         <!-- Error display -->
-        <p v-if="error" class="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+        <p v-if="error" class="text-xs text-rose-300 bg-rose-500/20 p-2.5 rounded-lg border border-rose-500/40">
           {{ error }}
         </p>
       </div>
 
       <!-- Actions Footer -->
-      <div class="p-4 bg-vb-cream/30 border-t border-vb-plum/10 flex items-center justify-end gap-2.5">
+      <div class="p-4 bg-white/[0.03] backdrop-blur-sm border-t border-white/10 flex items-center justify-end gap-2.5">
         <button
           type="button"
           @click="handleCancel"
           :disabled="isSubmitting"
-          class="px-4 py-2 text-xs font-semibold text-vb-muted hover:text-vb-plum rounded-full hover:bg-vb-plum/5 transition-colors disabled:opacity-50"
+          class="px-4 py-2 text-xs font-semibold text-purple-200/70 hover:text-white rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
         >
           {{ cancelText || 'Cancel' }}
         </button>
@@ -106,9 +106,9 @@
           class="px-5 py-2 rounded-full text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           :class="[
             variant === 'danger'
-              ? 'bg-rose-600 hover:bg-rose-700 text-white'
+              ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
               : variant === 'warning'
-              ? 'bg-amber-600 hover:bg-amber-700 text-white'
+              ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
               : 'btn-primary'
           ]"
         >

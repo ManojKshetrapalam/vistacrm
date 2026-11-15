@@ -1,25 +1,33 @@
 <template>
-  <div class="min-h-screen bg-vb-cream flex flex-col font-sans">
+  <div class="min-h-screen bg-[#18031E] flex flex-col font-sans text-white relative overflow-x-hidden selection:bg-vb-magenta selection:text-white">
     <!-- Top Brand Spectrum Bar -->
     <div class="spectrum h-1 w-full fixed top-0 left-0 z-50"></div>
 
-    <div class="flex-1 flex pt-1">
+    <!-- Ambient Mesh Background Canvas -->
+    <div class="ambient-canvas" aria-hidden="true">
+      <div class="ambient-blob-1"></div>
+      <div class="ambient-blob-2"></div>
+      <div class="ambient-blob-3"></div>
+      <div class="ambient-blob-4"></div>
+    </div>
+
+    <div class="flex-1 flex pt-1 relative z-10">
       <!-- Mobile Sidebar Overlay -->
       <div
         v-if="mobileSidebarOpen"
-        class="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+        class="fixed inset-0 z-40 bg-black/70 backdrop-blur-md lg:hidden transition-opacity"
         @click="mobileSidebarOpen = false"
       ></div>
 
-      <!-- Sidebar -->
+      <!-- Glass Sidebar (Deep Dark Plum Frosted Glass) -->
       <aside
-        class="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-vb-plum/10 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-40 w-64 glass-sidebar flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0"
         :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'"
       >
         <!-- Logo Area -->
-        <div class="p-5 border-b border-vb-plum/10 flex items-center justify-between">
-          <router-link to="/dashboard" class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-vb-cream p-1 shadow-sm border border-vb-plum/10 flex items-center justify-center shrink-0">
+        <div class="p-5 border-b border-white/10 flex items-center justify-between">
+          <router-link to="/dashboard" class="flex items-center gap-3 group">
+            <div class="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md p-1.5 shadow-md border border-white/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <img
                 :src="logoUrl"
                 alt="Vistabound Logo"
@@ -28,41 +36,41 @@
               />
             </div>
             <div class="leading-tight">
-              <span class="block font-display font-bold text-base tracking-tight text-vb-plum">VISTABOUND</span>
-              <span class="block text-[10px] tracking-[0.18em] uppercase text-vb-muted font-medium">Solutions LLP</span>
+              <span class="block font-display font-bold text-base tracking-tight text-white">VISTABOUND</span>
+              <span class="block text-[10px] tracking-[0.18em] uppercase text-vb-cyan font-semibold">Solutions LLP</span>
             </div>
           </router-link>
           <button
-            class="lg:hidden p-1.5 rounded-lg text-vb-muted hover:text-vb-plum"
+            class="lg:hidden p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
             @click="mobileSidebarOpen = false"
           >
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <!-- Role Pill in Sidebar -->
-        <div class="px-5 py-3 bg-vb-cream/50 border-b border-vb-plum/5 flex flex-col gap-1">
-          <div class="flex items-center justify-between">
-            <div class="text-xs text-vb-muted">Role:</div>
-            <span
-              class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-              :class="authStore.isAdmin ? 'bg-vb-plum text-white' : 'bg-vb-teal/10 text-vb-teal'"
-            >
-              {{ authStore.user?.role_display_name || (authStore.isAdmin ? 'Administrator' : 'Solutions Desk') }}
-            </span>
-          </div>
-          <div v-if="authStore.user?.team_name" class="flex items-center justify-between text-[11px] text-vb-muted">
-            <span>Team:</span>
-            <span class="font-semibold text-vb-plum">{{ authStore.user.team_name }}</span>
-          </div>
+        <!-- Desk Scope Badge -->
+        <div class="px-5 py-2.5 bg-black/30 border-b border-white/5 flex items-center justify-between">
+          <div class="text-[11px] text-purple-200/60 uppercase tracking-wider font-semibold">Desk Scope:</div>
+          <span
+            class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border"
+            :class="[
+              authStore.isAdmin
+                ? 'bg-gradient-to-r from-vb-magenta to-vb-violet text-white border-white/20 shadow-sm'
+                : (authStore.isTeamLead
+                    ? 'bg-vb-teal/20 text-teal-200 border-vb-teal/40'
+                    : 'bg-white/10 text-white/90 border-white/15')
+            ]"
+          >
+            {{ authStore.isAdmin ? 'Administrator' : (authStore.isTeamLead ? 'Team Lead' : 'Solutions Desk') }}
+          </span>
         </div>
 
         <!-- Navigation Links -->
-        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav class="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
           <router-link
             to="/dashboard"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/dashboard') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/dashboard') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <LayoutDashboard class="w-4 h-4" />
@@ -70,23 +78,21 @@
           </router-link>
 
           <router-link
-            v-if="authStore.can('leads.view')"
             to="/leads"
-            class="flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/leads') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/leads') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <div class="flex items-center gap-3">
               <Users class="w-4 h-4" />
-              <span>Lead Pipeline</span>
+              <span>Leads</span>
             </div>
           </router-link>
 
           <router-link
-            v-if="authStore.can('follow_ups.manage')"
             to="/follow-ups"
-            class="flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/follow-ups') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/follow-ups') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <div class="flex items-center gap-3">
@@ -95,100 +101,89 @@
             </div>
             <span
               v-if="dueFollowupsCount > 0"
-              class="px-1.5 py-0.5 text-[10px] font-bold rounded-full"
-              :class="isActive('/follow-ups') ? 'bg-white/20 text-white' : 'bg-vb-amber text-white'"
+              class="px-2 py-0.5 text-[10px] font-bold rounded-full"
+              :class="isActive('/follow-ups') ? 'bg-white/25 text-white' : 'bg-vb-orange text-white shadow-sm'"
             >
               {{ dueFollowupsCount }}
             </span>
           </router-link>
 
-          <div v-if="authStore.can('leads.import') || authStore.can('employees.manage') || (!isNative && authStore.can('roles.manage'))" class="pt-4 pb-1 px-3">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-vb-muted/70">Administration</span>
+          <!-- Admin Section -->
+          <div v-if="authStore.isAdmin" class="pt-4 pb-1.5 px-3.5">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-purple-200/40">Administration</span>
           </div>
 
           <router-link
-            v-if="authStore.can('leads.import')"
+            v-if="authStore.isAdmin"
             to="/import"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/import') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/import') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <FileSpreadsheet class="w-4 h-4" />
-            <span>Import Excel / CSV</span>
+            <span>Excel / CSV Ingestion</span>
           </router-link>
 
           <router-link
-            v-if="authStore.can('employees.manage')"
+            v-if="authStore.isAdmin"
             to="/employees"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/employees') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/employees') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <UserCheck class="w-4 h-4" />
-            <span>Employee Accounts</span>
+            <span>Staff &amp; Access Controls</span>
           </router-link>
 
           <router-link
-            v-if="!isNative && authStore.can('roles.manage')"
-            to="/roles"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/roles') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            v-if="authStore.isAdmin"
+            to="/settings"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/settings') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
-            <ShieldCheck class="w-4 h-4" />
-            <span>Roles & Permissions</span>
+            <Settings class="w-4 h-4" />
+            <span>CRM &amp; Templates</span>
           </router-link>
 
-          <div class="pt-4 pb-1 px-3">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-vb-muted/70">System</span>
+          <!-- System Section -->
+          <div class="pt-4 pb-1.5 px-3.5">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-purple-200/40">System</span>
           </div>
 
           <router-link
             to="/notifications"
-            class="flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/notifications') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
+            class="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all"
+            :class="isActive('/notifications') ? 'bg-gradient-to-r from-vb-magenta to-vb-plum text-white shadow-lg shadow-vb-magenta/30 border border-white/20' : 'text-purple-200/70 hover:text-white hover:bg-white/[0.06]'"
             @click="mobileSidebarOpen = false"
           >
             <div class="flex items-center gap-3">
               <BellRing class="w-4 h-4" />
-              <span>Notifications & Logs</span>
+              <span>Notifications</span>
             </div>
             <span
               v-if="unreadNotificationsCount > 0"
-              class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-vb-violet text-white"
-            >
-              {{ unreadNotificationsCount }}
-            </span>
-          </router-link>
-
-          <router-link
-            v-if="authStore.can('settings.manage')"
-            to="/settings"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all"
-            :class="isActive('/settings') ? 'bg-vb-plum text-white shadow-sm' : 'text-vb-ink/80 hover:bg-vb-plum/5 hover:text-vb-plum'"
-            @click="mobileSidebarOpen = false"
-          >
-            <Settings class="w-4 h-4" />
-            <span>CRM & Templates</span>
+              class="w-2 h-2 rounded-full bg-vb-cyan shadow-sm shadow-vb-cyan"
+            ></span>
           </router-link>
         </nav>
 
-        <!-- User Profile Card in Sidebar Footer -->
-        <div class="p-4 border-t border-vb-plum/10 bg-vb-cream/30">
-          <div class="flex items-center justify-between">
+        <!-- User Profile Pill in Sidebar Footer -->
+        <div class="p-3 border-t border-white/10 bg-black/35">
+          <div class="p-2.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md flex items-center justify-between">
             <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-9 h-9 rounded-full bg-vb-plum text-white flex items-center justify-center font-display font-bold text-sm shrink-0">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
                 {{ userInitials }}
               </div>
-              <div class="truncate">
-                <p class="text-sm font-bold text-vb-plum truncate">{{ authStore.user?.name }}</p>
-                <p class="text-xs text-vb-muted truncate">{{ authStore.user?.email }}</p>
+              <div class="min-w-0">
+                <span class="block text-xs font-semibold text-white truncate">{{ authStore.user?.name }}</span>
+                <span class="block text-[10px] text-purple-200/60 truncate">{{ authStore.user?.email }}</span>
               </div>
             </div>
             <button
-              title="Logout"
-              class="p-1.5 text-vb-muted hover:text-rose-600 rounded-lg transition-colors"
               @click="handleLogout"
+              class="p-1.5 text-purple-200/60 hover:text-rose-300 hover:bg-white/10 rounded-lg transition-colors shrink-0"
+              title="Sign Out"
             >
               <LogOut class="w-4 h-4" />
             </button>
@@ -196,184 +191,316 @@
         </div>
       </aside>
 
-      <!-- Main Content Container -->
+      <!-- Main Shell Area -->
       <div class="flex-1 flex flex-col min-w-0">
-        <!-- Topbar -->
-        <header class="h-16 bg-white/80 backdrop-blur border-b border-vb-plum/10 sticky top-1 z-30 px-4 sm:px-8 flex items-center justify-between">
-          <div class="flex items-center gap-4">
+        <!-- Elevated Glass Header (Dark Luxury Frosted Header) -->
+        <header class="glass-surface rounded-none border-t-0 border-x-0 border-b border-white/10 bg-[#1A0420]/80 backdrop-blur-xl px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-1 z-30 shadow-md">
+          <div class="flex items-center gap-3">
             <button
-              class="lg:hidden p-2 rounded-xl text-vb-plum hover:bg-vb-cream"
+              class="lg:hidden p-2 text-purple-200 hover:bg-white/10 rounded-xl transition-colors"
               @click="mobileSidebarOpen = true"
             >
               <Menu class="w-5 h-5" />
             </button>
-            <h1 class="font-display font-bold text-lg text-vb-plum hidden sm:block">
-              {{ currentTitle }}
-            </h1>
+            <div class="hidden sm:block">
+              <div class="text-[11px] font-semibold text-purple-200/60 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Vistabound CRM</span>
+                <span>/</span>
+                <span class="text-vb-magenta font-bold">{{ currentTitle }}</span>
+              </div>
+              <h1 class="text-lg sm:text-xl font-display font-bold text-white leading-tight">
+                {{ currentTitle }}
+              </h1>
+            </div>
           </div>
 
-          <!-- Topbar Actions -->
+          <!-- Center Search Pill (From Mockup) -->
+          <div class="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.07] border border-white/10 text-xs text-purple-200/60 w-64 lg:w-80 focus-within:border-vb-magenta/50 focus-within:bg-white/[0.1] transition-all">
+            <Search class="w-3.5 h-3.5 text-purple-300" />
+            <input
+              type="text"
+              placeholder="Search leads, clients, tickets..."
+              class="bg-transparent border-none outline-none text-xs text-white placeholder:text-purple-200/40 flex-1 font-sans"
+            />
+            <kbd class="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-purple-200/50 font-mono">/</kbd>
+          </div>
+
           <div class="flex items-center gap-3">
-            <!-- Offline / Online Sync State Indicator -->
+            <!-- Sync Indicator Pill -->
             <button
               v-if="isOnline"
               @click="handleManualSync"
               :disabled="isSyncing"
-              title="Click to trigger full synchronization with cloud"
-              class="hidden sm:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-emerald-500/20 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+              class="hidden sm:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-emerald-500/30 bg-emerald-500/10 backdrop-blur-sm text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              title="Network Online — Click to force sync"
             >
-              <span class="w-2 h-2 rounded-full bg-emerald-500" :class="{'animate-pulse': !isSyncing}"></span>
-              <span>{{ isSyncing ? 'Syncing...' : (pendingCount > 0 ? `Syncing (${pendingCount})` : 'Online') }}</span>
-              <RefreshCw class="w-3 h-3 text-emerald-600" :class="{'animate-spin': isSyncing}" />
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Online</span>
+              <RefreshCw class="w-3 h-3 text-emerald-300 ml-0.5" :class="{'animate-spin': isSyncing}" />
             </button>
             <div
               v-else
-              title="Offline Mode - Changes are queued and will synchronize automatically when online"
-              class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-amber-500/30 bg-amber-50 text-amber-800"
+              title="Offline Mode — Changes are queued and will synchronize automatically when online"
+              class="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300"
             >
-              <CloudOff class="w-3.5 h-3.5 text-amber-600" />
+              <CloudOff class="w-3.5 h-3.5 text-amber-300" />
               <span>Offline{{ pendingCount > 0 ? ` (${pendingCount} queued)` : '' }}</span>
             </div>
 
+            <!-- Quick Action "Add Lead" -->
             <router-link
-              v-if="authStore.can('leads.create')"
               to="/leads/new"
-              class="btn-primary text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5"
+              class="btn-primary text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-1.5 shadow-md shadow-vb-magenta/20"
             >
               <Plus class="w-3.5 h-3.5" />
-              <span>Add Lead</span>
+              <span class="hidden sm:inline">Add Lead</span>
             </router-link>
 
-            <!-- Notifications Drawer Trigger -->
+            <!-- Notifications Bell -->
             <router-link
               to="/notifications"
-              class="relative p-2 text-vb-plum/80 hover:text-vb-plum hover:bg-vb-cream rounded-xl transition-colors"
+              class="relative p-2 text-purple-200 hover:text-white hover:bg-white/10 rounded-xl transition-all border border-transparent hover:border-white/10"
               title="Notifications"
             >
               <Bell class="w-5 h-5" />
               <span
                 v-if="unreadNotificationsCount > 0"
-                class="absolute top-1 right-1 w-2.5 h-2.5 bg-vb-violet rounded-full ring-2 ring-white"
+                class="absolute top-1 right-1 w-2.5 h-2.5 bg-vb-magenta rounded-full ring-2 ring-[#18031E] animate-pulse"
               ></span>
             </router-link>
+
+            <!-- User Pill in Topbar (From Mockup) -->
+            <div class="flex items-center gap-2.5 pl-2 border-l border-white/10">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
+                {{ userInitials }}
+              </div>
+              <div class="hidden xl:block text-left text-xs leading-tight">
+                <span class="font-bold text-white block">{{ authStore.user?.name }}</span>
+                <span class="text-[10px] text-purple-200/60 block">{{ authStore.isAdmin ? 'Sales Director' : (authStore.isTeamLead ? 'Sales Manager' : 'Client Advisor') }}</span>
+              </div>
+            </div>
           </div>
         </header>
 
         <!-- Dynamic Page View -->
-        <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
           <slot />
         </main>
       </div>
     </div>
 
-    <!-- Outstanding Follow-up Briefing (on login/session load) -->
-    <LoginFollowUpModal />
+    <!-- Mobile Bottom Navigation Bar (Figma Design) -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15021B]/95 backdrop-blur-2xl border-t border-white/10 px-3 py-2 flex items-center justify-around shadow-2xl">
+      <router-link
+        to="/dashboard"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all"
+        :class="isActive('/dashboard') ? 'text-white bg-gradient-to-r from-vb-magenta/40 to-vb-plum/40 border border-white/15 shadow-sm' : 'text-purple-200/60 hover:text-white'"
+      >
+        <LayoutDashboard class="w-4 h-4" />
+        <span class="text-[10px] font-semibold tracking-tight">Home</span>
+      </router-link>
 
-    <!-- Active Real-time Reminder Alert Modal -->
-    <ActiveReminderModal />
+      <router-link
+        to="/leads"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all"
+        :class="isActive('/leads') ? 'text-white bg-gradient-to-r from-vb-magenta/40 to-vb-plum/40 border border-white/15 shadow-sm' : 'text-purple-200/60 hover:text-white'"
+      >
+        <Users class="w-4 h-4" />
+        <span class="text-[10px] font-semibold tracking-tight">Leads</span>
+      </router-link>
+
+      <router-link
+        to="/follow-ups"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all relative"
+        :class="isActive('/follow-ups') ? 'text-white bg-gradient-to-r from-vb-magenta/40 to-vb-plum/40 border border-white/15 shadow-sm' : 'text-purple-200/60 hover:text-white'"
+      >
+        <div class="relative">
+          <CalendarClock class="w-4 h-4" />
+          <span
+            v-if="dueFollowupsCount > 0"
+            class="absolute -top-1 -right-2 px-1 py-0.2 text-[8px] font-bold rounded-full bg-vb-orange text-white"
+          >
+            {{ dueFollowupsCount }}
+          </span>
+        </div>
+        <span class="text-[10px] font-semibold tracking-tight">Pipeline</span>
+      </router-link>
+
+      <router-link
+        to="/notifications"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all relative"
+        :class="isActive('/notifications') ? 'text-white bg-gradient-to-r from-vb-magenta/40 to-vb-plum/40 border border-white/15 shadow-sm' : 'text-purple-200/60 hover:text-white'"
+      >
+        <div class="relative">
+          <Bell class="w-4 h-4" />
+          <span
+            v-if="unreadNotificationsCount > 0"
+            class="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-vb-magenta ring-1 ring-[#18031E]"
+          ></span>
+        </div>
+        <span class="text-[10px] font-semibold tracking-tight">Alerts</span>
+      </router-link>
+
+      <button
+        @click="mobileSidebarOpen = true"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all text-purple-200/60 hover:text-white"
+      >
+        <Menu class="w-4 h-4" />
+        <span class="text-[10px] font-semibold tracking-tight">More</span>
+      </button>
+    </nav>
+
+    <!-- Active 5-minute Reminder Alert Modal -->
+    <ActiveReminderModal
+      :is-open="activeReminderModalOpen"
+      :follow-up="dueFollowUp"
+      @close="activeReminderModalOpen = false"
+      @complete="onReminderComplete"
+      @reschedule="onReminderReschedule"
+    />
+
+    <!-- Login Follow-up Briefing Modal -->
+    <LoginFollowUpModal
+      :is-open="loginBriefingModalOpen"
+      :follow-ups="pendingBriefingItems"
+      @close="loginBriefingModalOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Capacitor } from '@capacitor/core';
-import vistaboundLogo from '@/assets/vistabound-logo.png';
 import { useAuthStore } from '../stores/auth';
-import { useNotificationStore } from '../stores/notification';
+import { isOnline, syncEngine } from '../services/syncEngine';
 import api from '../api/axios';
-import LoginFollowUpModal from './LoginFollowUpModal.vue';
 import ActiveReminderModal from './ActiveReminderModal.vue';
-import { isOnline, isSyncing, pendingCount, syncEngine } from '../services/syncEngine';
-import { getAssetUrl } from '@/utils/basePath';
-
-const isNative = Capacitor.isNativePlatform();
-
-const logoUrl = computed(() => {
-  return vistaboundLogo;
-});
-
-const onLogoError = (e: Event) => {
-  const el = e.target as HTMLImageElement;
-  if (!el.dataset.fallback) {
-    el.dataset.fallback = '1';
-    el.src = getAssetUrl('images/vistabound-logo.png');
-  } else if (el.dataset.fallback === '1') {
-    el.dataset.fallback = '2';
-    el.src = '/images/vistabound-logo.png';
-  }
-};
+import LoginFollowUpModal from './LoginFollowUpModal.vue';
 import {
   LayoutDashboard,
   Users,
   CalendarClock,
   FileSpreadsheet,
   UserCheck,
-  ShieldCheck,
-  BellRing,
   Settings,
+  BellRing,
   LogOut,
-  Menu,
   X,
+  Menu,
   Plus,
   Bell,
+  Search,
   RefreshCw,
   CloudOff,
 } from 'lucide-vue-next';
 
-const handleManualSync = async () => {
-  await syncEngine.sync();
-};
-
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-const notificationStore = useNotificationStore();
 
 const mobileSidebarOpen = ref(false);
+const logoUrl = ref('/favicon.jpg');
+const isSyncing = ref(false);
+const pendingCount = ref(0);
 
-const dueFollowupsCount = computed(() => {
-  return (notificationStore.followUpCounts?.today || 0) + (notificationStore.followUpCounts?.overdue || 0);
-});
+const dueFollowupsCount = ref(0);
+const unreadNotificationsCount = ref(0);
 
-const unreadNotificationsCount = computed(() => {
-  return notificationStore.unreadCount || authStore.unreadCount || 0;
-});
+const activeReminderModalOpen = ref(false);
+const dueFollowUp = ref<any>(null);
 
-const isActive = (path: string) => {
-  return route.path === path || (path !== '/dashboard' && route.path.startsWith(path));
-};
+const loginBriefingModalOpen = ref(false);
+const pendingBriefingItems = ref<any[]>([]);
+
+let pollingInterval: any = null;
 
 const currentTitle = computed(() => {
-  if (route.path.startsWith('/leads/new')) return 'Create New Lead';
-  if (route.path.startsWith('/leads/')) return 'Lead Details & Timeline';
-  if (route.path.startsWith('/leads')) return 'Lead Management Pipeline';
-  if (route.path.startsWith('/follow-ups')) return 'Follow-up Schedule & Tasks';
-  if (route.path.startsWith('/import')) return 'Batch Lead Import';
-  if (route.path.startsWith('/employees')) return 'Employee Directory';
-  if (route.path.startsWith('/notifications')) return 'Notification Delivery Center';
-  if (route.path.startsWith('/settings')) return 'CRM Configuration & Templates';
-  return 'Operational Overview';
+  const titles: Record<string, string> = {
+    '/dashboard': 'Dashboard Overview',
+    '/leads': 'Leads Pipeline',
+    '/leads/new': 'Register New Lead',
+    '/follow-ups': 'Daily Follow-ups',
+    '/import': 'Batch Data Ingestion',
+    '/employees': 'Team Administration',
+    '/settings': 'System Settings',
+    '/notifications': 'Notification Center',
+  };
+  return titles[route.path] || 'CRM Desk';
 });
 
 const userInitials = computed(() => {
-  if (!authStore.user?.name) return 'VB';
-  const parts = authStore.user.name.split(' ');
-  return parts.length > 1
-    ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : parts[0].slice(0, 2).toUpperCase();
+  const name = authStore.user?.name || 'CRM';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
 });
 
+const isActive = (path: string) => {
+  if (path === '/leads' && route.path.startsWith('/leads') && route.path !== '/leads/new') {
+    return true;
+  }
+  return route.path === path;
+};
+
+const onLogoError = () => {
+  if (logoUrl.value === '/favicon.jpg') {
+    logoUrl.value = '/favicon.png';
+  } else if (logoUrl.value === '/favicon.png') {
+    logoUrl.value = '/images/vistabound-logo.png';
+  }
+};
+
+const handleManualSync = async () => {
+  if (isSyncing.value) return;
+  isSyncing.value = true;
+  try {
+    await syncEngine.processOutbox();
+    await fetchLivePollData();
+  } finally {
+    isSyncing.value = false;
+  }
+};
+
 const handleLogout = async () => {
-  notificationStore.stopPolling();
   await authStore.logout();
   router.push('/login');
 };
 
-onMounted(() => {
-  if (authStore.isAuthenticated) {
-    notificationStore.startPolling();
-    authStore.fetchMe();
+const fetchLivePollData = async () => {
+  if (!authStore.isAuthenticated) return;
+  try {
+    const res = await api.get('/notifications/poll');
+    dueFollowupsCount.value = res.data.due_followups_count || 0;
+    unreadNotificationsCount.value = res.data.unread_notifications_count || 0;
+    pendingCount.value = await syncEngine.getQueueCount();
+
+    if (res.data.active_reminder && !activeReminderModalOpen.value) {
+      dueFollowUp.value = res.data.active_reminder;
+      activeReminderModalOpen.value = true;
+    }
+  } catch (err) {
+    // quiet polling fallback
   }
+};
+
+const onReminderComplete = () => {
+  activeReminderModalOpen.value = false;
+  fetchLivePollData();
+};
+
+const onReminderReschedule = () => {
+  activeReminderModalOpen.value = false;
+  fetchLivePollData();
+};
+
+onMounted(async () => {
+  await fetchLivePollData();
+  pollingInterval = setInterval(fetchLivePollData, 30000);
+});
+
+onUnmounted(() => {
+  if (pollingInterval) clearInterval(pollingInterval);
 });
 </script>

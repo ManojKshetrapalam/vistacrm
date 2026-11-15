@@ -21,6 +21,23 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 
+// Public Mobile OTA Version Check
+Route::get('/mobile/ota-version', function () {
+    $manifestPath = public_path('ota/ota-version.json');
+    if (file_exists($manifestPath)) {
+        return response()->file($manifestPath, [
+            'Content-Type' => 'application/json',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+    return response()->json([
+        'version' => '1.0.2',
+        'url' => 'https://vistaboundintegrated.com/CRM/ota/bundle-v1.0.2.zip',
+    ], 200, [
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
 // Protected routes (Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
     // Auth & Profile

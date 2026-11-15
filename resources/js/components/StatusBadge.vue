@@ -1,10 +1,10 @@
 <template>
   <span
-    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border tracking-wide uppercase"
+    class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-bold rounded-full border tracking-wide uppercase shadow-2xs backdrop-blur-md"
     :class="statusClass"
   >
-    <span class="w-1.5 h-1.5 rounded-full" :class="dotClass"></span>
-    {{ formattedStatus }}
+    <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="dotClass"></span>
+    <span>{{ formattedStatus }}</span>
   </span>
 </template>
 
@@ -16,43 +16,43 @@ const props = defineProps<{
 }>();
 
 const formattedStatus = computed(() => {
-  return (props.status || 'new').replace('_', ' ');
+  return (props.status || 'new').replace(/_/g, ' ');
 });
 
 const statusClass = computed(() => {
   switch (props.status) {
     case 'new':
-      return 'bg-cyan-50 text-cyan-800 border-cyan-200';
+      return 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-xs shadow-cyan-500/20';
     case 'assigned':
-      return 'bg-purple-50 text-purple-800 border-purple-200';
+      return 'bg-purple-500/20 text-purple-200 border-purple-400/40 shadow-xs shadow-purple-500/20';
     case 'contacted':
-      return 'bg-amber-50 text-amber-800 border-amber-200';
+      return 'bg-teal-500/20 text-teal-300 border-teal-400/40 shadow-xs shadow-teal-500/20';
     case 'follow_up':
-      return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      return 'bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-400/40 shadow-xs shadow-fuchsia-500/20';
     case 'interested':
-      return 'bg-teal-50 text-teal-800 border-teal-200';
+      return 'bg-amber-500/20 text-amber-300 border-amber-400/40 shadow-xs shadow-amber-500/20';
     case 'converted':
-      return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      return 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-xs shadow-emerald-500/20';
     case 'lost':
-      return 'bg-rose-50 text-rose-800 border-rose-200';
+      return 'bg-rose-500/20 text-rose-300 border-rose-400/40 shadow-xs shadow-rose-500/20';
     case 'not_reachable':
-      return 'bg-gray-100 text-gray-700 border-gray-300';
+      return 'bg-white/10 text-slate-300 border-white/20';
     default:
-      return 'bg-gray-50 text-gray-700 border-gray-200';
+      return 'bg-white/10 text-purple-200 border-white/20';
   }
 });
 
 const dotClass = computed(() => {
   switch (props.status) {
-    case 'new': return 'bg-cyan-500';
-    case 'assigned': return 'bg-purple-500';
-    case 'contacted': return 'bg-amber-500';
-    case 'follow_up': return 'bg-indigo-500';
-    case 'interested': return 'bg-teal-500';
-    case 'converted': return 'bg-emerald-500';
-    case 'lost': return 'bg-rose-500';
-    case 'not_reachable': return 'bg-gray-400';
-    default: return 'bg-gray-400';
+    case 'new': return 'bg-cyan-500 shadow-xs shadow-cyan-500';
+    case 'assigned': return 'bg-purple-500 shadow-xs shadow-purple-500';
+    case 'contacted': return 'bg-amber-500 shadow-xs shadow-amber-500';
+    case 'follow_up': return 'bg-indigo-500 shadow-xs shadow-indigo-500';
+    case 'interested': return 'bg-teal-500 shadow-xs shadow-teal-500';
+    case 'converted': return 'bg-emerald-500 shadow-xs shadow-emerald-500';
+    case 'lost': return 'bg-rose-500 shadow-xs shadow-rose-500';
+    case 'not_reachable': return 'bg-slate-400';
+    default: return 'bg-slate-400';
   }
 });
 </script>

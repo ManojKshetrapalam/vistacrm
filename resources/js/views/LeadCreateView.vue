@@ -2,17 +2,24 @@
   <AppLayout>
     <div class="max-w-3xl mx-auto space-y-6">
       <!-- Breadcrumb -->
-      <div class="flex items-center gap-2 text-xs text-vb-muted">
-        <router-link to="/leads" class="hover:text-vb-plum">Leads</router-link>
+      <div class="flex items-center gap-2 text-xs text-purple-200/60">
+        <router-link to="/leads" class="hover:text-white">Leads</router-link>
         <span>/</span>
-        <span class="text-vb-plum font-semibold">New Lead</span>
+        <span class="text-white font-semibold">New Lead</span>
       </div>
 
-      <div class="card-glass p-6 sm:p-8">
-        <div class="border-b border-vb-plum/10 pb-5 mb-6">
-          <span class="text-xs font-bold uppercase tracking-widest text-vb-violet font-display">Intake Form</span>
-          <h2 class="text-2xl font-display font-bold text-vb-plum mt-1">Register New Lead Account</h2>
-          <p class="text-xs text-vb-muted mt-1">
+      <div class="glass-surface p-6 sm:p-8 relative overflow-hidden shadow-2xl border border-white/10">
+        <!-- Top Brand Accent -->
+        <div class="h-1.5 w-full spectrum absolute top-0 left-0"></div>
+
+        <div class="border-b border-white/10 pb-5 mb-6 pt-2">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-vb-magenta/20 text-purple-200 border border-vb-magenta/30">
+              Intake Desk
+            </span>
+          </div>
+          <h2 class="text-2xl font-display font-bold text-white mt-2">Register New Lead Account</h2>
+          <p class="text-xs text-purple-200/70 mt-1">
             Fill in client contact information. Phone number will be normalized for WhatsApp compatibility and duplicate checks.
           </p>
         </div>
@@ -20,20 +27,20 @@
         <!-- Duplicate Warning Alert -->
         <div
           v-if="duplicateLead"
-          class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-2 animate-in fade-in"
+          class="mb-6 p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs space-y-2 animate-in fade-in backdrop-blur-sm"
         >
-          <div class="flex items-center gap-2 font-bold text-sm text-amber-950">
-            <AlertTriangle class="w-4 h-4 text-amber-600" />
+          <div class="flex items-center gap-2 font-bold text-sm text-amber-300">
+            <AlertTriangle class="w-4 h-4 text-amber-400" />
             <span>Duplicate Phone Detected in CRM</span>
           </div>
           <p>
-            An existing lead <strong>{{ duplicateLead.name }}</strong> (Ref: <router-link :to="`/leads/${duplicateLead.id}`" class="underline font-bold">{{ duplicateLead.reference_id }}</router-link>) with company <em>{{ duplicateLead.company_name || 'N/A' }}</em> is already registered to representative <strong>{{ duplicateLead.assigned_to_name }}</strong>.
+            An existing lead <strong>{{ duplicateLead.name }}</strong> (Ref: <router-link :to="`/leads/${duplicateLead.id}`" class="underline font-bold text-vb-cyan hover:text-white">{{ duplicateLead.reference_id }}</router-link>) with company <em>{{ duplicateLead.company_name || 'N/A' }}</em> is already registered to representative <strong>{{ duplicateLead.assigned_to_name }}</strong>.
           </p>
-          <label class="flex items-center gap-2 pt-1 font-semibold text-amber-950 cursor-pointer">
+          <label class="flex items-center gap-2 pt-1 font-semibold text-amber-200 cursor-pointer">
             <input
               type="checkbox"
               v-model="confirmDuplicate"
-              class="rounded text-vb-plum focus:ring-vb-plum"
+              class="rounded text-vb-magenta focus:ring-vb-magenta"
             />
             <span>I confirm this is a separate inquiry. Create record anyway.</span>
           </label>
@@ -44,8 +51,8 @@
           <div class="grid sm:grid-cols-2 gap-4">
             <!-- Lead Name -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-                Lead / Contact Name <span class="text-rose-500">*</span>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+                Lead / Contact Name <span class="text-rose-400">*</span>
               </label>
               <input
                 v-model="form.name"
@@ -58,8 +65,8 @@
 
             <!-- Phone Number -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-                Mobile / WhatsApp Phone <span class="text-rose-500">*</span>
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+                Mobile / WhatsApp Phone <span class="text-rose-400">*</span>
               </label>
               <input
                 v-model="form.phone"
@@ -74,7 +81,7 @@
           <div class="grid sm:grid-cols-2 gap-4">
             <!-- Email -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Email Address
               </label>
               <input
@@ -87,7 +94,7 @@
 
             <!-- Company Name -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Company / Organization Name
               </label>
               <input
@@ -102,7 +109,7 @@
           <div class="grid sm:grid-cols-2 gap-4">
             <!-- Lead Source -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Lead Source
               </label>
               <select v-model="form.source" class="field text-sm">
@@ -112,12 +119,12 @@
 
             <!-- Service Interest -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Service or Product Interest
               </label>
               <select v-model="form.service_interest" class="field text-sm">
                 <option value="">Select Primary Interest...</option>
-                <option v-for="cat in displayCategories" :key="cat" :value="cat">{{ cat }}</option>
+                <option v-for="cat in serviceCategories" :key="cat" :value="cat">{{ cat }}</option>
               </select>
             </div>
           </div>
@@ -125,7 +132,7 @@
           <div class="grid sm:grid-cols-3 gap-4">
             <!-- Status -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Initial Status
               </label>
               <select v-model="form.status" class="field text-sm">
@@ -139,7 +146,7 @@
 
             <!-- Priority -->
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
                 Priority Level
               </label>
               <select v-model="form.priority" class="field text-sm">
@@ -150,13 +157,13 @@
               </select>
             </div>
 
-            <!-- Assigned Representative (Admin Only) -->
-            <div v-if="authStore.isAdmin">
-              <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-                Assign Representative
+            <!-- Assigned Representative (Admin & Team Lead) -->
+            <div v-if="authStore.isAdmin || authStore.isTeamLead">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+                {{ authStore.isAdmin ? 'Assign Representative' : 'Assign Representative (Self or Team Member)' }}
               </label>
               <select v-model="form.assigned_to" class="field text-sm">
-                <option value="">Leave Unassigned</option>
+                <option value="">{{ authStore.isAdmin ? 'Leave Unassigned' : 'Assign to Myself' }}</option>
                 <option v-for="emp in employeesList" :key="emp.id" :value="emp.id">
                   {{ emp.name }}
                 </option>
@@ -166,7 +173,7 @@
 
           <!-- Next Follow-up Date (Optional) -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Schedule Initial Follow-up (Optional)
             </label>
             <input
@@ -178,7 +185,7 @@
 
           <!-- Additional Details -->
           <div>
-            <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
               Inquiry Scope &amp; Background Details
             </label>
             <textarea
@@ -189,22 +196,22 @@
             ></textarea>
           </div>
 
-          <div v-if="errorMsg" class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+          <div v-if="errorMsg" class="p-3.5 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs rounded-xl backdrop-blur-sm">
             {{ errorMsg }}
           </div>
 
           <!-- Form Buttons -->
-          <div class="pt-4 border-t border-vb-plum/10 flex items-center justify-end gap-3">
+          <div class="pt-5 border-t border-white/10 flex items-center justify-end gap-3">
             <router-link
               to="/leads"
-              class="px-5 py-2.5 rounded-full text-xs font-semibold text-vb-plum hover:bg-vb-plum/5 transition-colors"
+              class="btn-ghost px-5 py-2.5 rounded-full text-xs font-semibold"
             >
               Cancel
             </router-link>
             <button
               type="submit"
               :disabled="submitting"
-              class="btn-primary text-xs font-semibold px-6 py-2.5 rounded-full flex items-center gap-2 shadow-md"
+              class="btn-primary text-xs font-semibold px-6 py-2.5 rounded-full flex items-center gap-2 shadow-md shadow-vb-magenta/30"
             >
               <Check class="w-4 h-4" />
               <span>{{ submitting ? 'Saving...' : 'Create Lead Record' }}</span>
@@ -217,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
@@ -231,15 +238,6 @@ const authStore = useAuthStore();
 const leadSources = ref<string[]>(['Website', 'WhatsApp Inbound', 'LinkedIn', 'Referral', 'Cold Outreach']);
 const serviceCategories = ref<string[]>([]);
 const employeesList = ref<any[]>([]);
-
-const displayCategories = computed(() => {
-  const allowed = authStore.user?.allowed_categories;
-  if (!allowed || allowed.length === 0 || authStore.isAdmin) {
-    return serviceCategories.value;
-  }
-  const allowedNorm = allowed.map((c: string) => c.toLowerCase().trim());
-  return serviceCategories.value.filter((cat: string) => allowedNorm.includes(cat.toLowerCase().trim()));
-});
 
 const submitting = ref(false);
 const errorMsg = ref('');
@@ -266,9 +264,6 @@ const fetchSettings = async () => {
     leadSources.value = res.data.lead_sources || [];
     serviceCategories.value = res.data.service_categories || [];
     employeesList.value = res.data.employees || [];
-    if (displayCategories.value.length === 1 && !form.service_interest) {
-      form.service_interest = displayCategories.value[0];
-    }
   } catch (err) {
     // quiet
   }

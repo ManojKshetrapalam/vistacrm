@@ -1,18 +1,18 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-vb-plum/10 animate-in fade-in zoom-in-95 duration-200">
+  <div v-if="isOpen" class="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+    <div class="glass-elevated max-w-md w-full overflow-hidden border border-white/15 shadow-2xl animate-in zoom-in-95 duration-150">
       <!-- Header -->
-      <div class="p-5 border-b border-vb-plum/10 flex items-center justify-between bg-vb-cream/50">
+      <div class="p-5 border-b border-white/10 flex items-center justify-between bg-white/[0.04] backdrop-blur-md">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-vb-plum text-white flex items-center justify-center shadow-md">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white flex items-center justify-center shadow-sm border border-white/20">
             <PhoneCall class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="font-display font-bold text-base text-vb-plum">Log Call Outcome</h3>
-            <p class="text-xs text-vb-muted">{{ lead?.name }} · {{ lead?.phone }}</p>
+            <h3 class="font-display font-bold text-base text-white">Log Call Outcome</h3>
+            <p class="text-xs text-purple-200/70 font-medium">{{ lead?.name }} · {{ lead?.phone }}</p>
           </div>
         </div>
-        <button @click="close" class="p-1 rounded-lg text-vb-muted hover:text-vb-plum">
+        <button @click="close" class="p-1.5 rounded-lg text-purple-300 hover:text-white hover:bg-white/10 transition-colors">
           <X class="w-5 h-5" />
         </button>
       </div>
@@ -21,11 +21,11 @@
       <form @submit.prevent="handleSubmit" class="p-6 space-y-4">
         <!-- Call Outcome -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
-            Call Outcome <span class="text-rose-500">*</span>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
+            Call Outcome <span class="text-rose-400">*</span>
           </label>
           <select v-model="form.outcome" required class="field text-sm">
-            <option value="Connected">Connected & Spoke with Client</option>
+            <option value="Connected">Connected &amp; Spoke with Client</option>
             <option value="Callback Requested">Callback Requested</option>
             <option value="Interested">Interested / Qualified</option>
             <option value="Meeting Scheduled">Meeting / Consultation Scheduled</option>
@@ -38,7 +38,7 @@
 
         <!-- Duration -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
             Call Duration (Minutes)
           </label>
           <input
@@ -53,7 +53,7 @@
 
         <!-- Update Status -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
             Update Lead Status To
           </label>
           <select v-model="form.update_status" class="field text-sm">
@@ -69,19 +69,19 @@
 
         <!-- Schedule Next Follow-up -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
             Schedule Next Follow-up (Optional)
           </label>
           <input
             v-model="form.next_follow_up_date"
             type="datetime-local"
-            class="field text-sm"
+            class="field text-sm font-sans"
           />
         </div>
 
         <!-- Notes -->
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-vb-plum mb-1.5">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5">
             Discussion Summary / Notes
           </label>
           <textarea
@@ -96,31 +96,31 @@
         <div class="pt-1">
           <a
             :href="'tel:' + (lead?.phone || '')"
-            class="w-full py-2 px-3 border border-vb-plum/20 hover:border-vb-plum text-vb-plum rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+            class="w-full py-2.5 px-3 bg-white/10 hover:bg-white/15 border border-white/15 hover:border-vb-magenta/40 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
           >
-            <Phone class="w-3.5 h-3.5" />
+            <Phone class="w-3.5 h-3.5 text-vb-cyan" />
             <span>Launch Phone Dialler ({{ lead?.phone }})</span>
           </a>
         </div>
 
         <!-- Error Msg -->
-        <p v-if="error" class="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+        <p v-if="error" class="text-xs text-rose-300 bg-rose-500/20 p-2.5 rounded-xl border border-rose-500/40">
           {{ error }}
         </p>
 
         <!-- Footer -->
-        <div class="pt-3 border-t border-vb-plum/10 flex items-center justify-end gap-2.5">
+        <div class="pt-3 border-t border-white/10 flex items-center justify-end gap-2.5">
           <button
             type="button"
             @click="close"
-            class="px-4 py-2 text-xs font-semibold text-vb-plum hover:bg-vb-plum/5 rounded-full transition-colors"
+            class="px-4 py-2 text-xs font-semibold text-purple-200/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             :disabled="submitting"
-            class="btn-primary text-xs font-semibold px-5 py-2.5 rounded-full flex items-center gap-1.5"
+            class="btn-primary text-xs font-semibold px-5 py-2.5 rounded-full flex items-center gap-1.5 shadow-sm disabled:opacity-50"
           >
             <Check class="w-3.5 h-3.5" />
             <span>{{ submitting ? 'Saving...' : 'Save Call Log' }}</span>

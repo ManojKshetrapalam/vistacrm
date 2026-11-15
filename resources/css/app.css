@@ -3,26 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --plum: #3B0A32;
-  --plum-2: #5B1450;
-  --violet: #7B2D8E;
-  --teal: #1E7FA8;
-  --cyan: #21A3C4;
-  --green: #4E9E4A;
-  --emerald: #2F8F6E;
-  --amber: #D9701F;
-  --cream: #F5F7FA;
-  --cream-2: #E5E7EB;
-  --ink: #111827;
-  --muted: #6B7280;
-  --spectrum: linear-gradient(90deg, #5B1450 0%, #7B2D8E 20%, #1E7FA8 42%, #21A3C4 56%, #4E9E4A 74%, #D9701F 100%);
+  /* Vistabound Brand Foundations */
+  --vb-plum: #5A0E57;
+  --vb-plum-deep: #1E0522;
+  --vb-plum-dark: #140317;
+  --vb-plum-surface: rgba(35, 6, 40, 0.65);
+  --vb-magenta: #8E1E78;
+  --vb-violet: #7B2D8E;
+  
+  /* Multicolour Logo Accents */
+  --vb-teal: #00A9A5;
+  --vb-cyan: #21A3C4;
+  --vb-green: #7BBF3B;
+  --vb-orange: #FF8C00;
+  
+  /* Dark Canvas Surfaces */
+  --vb-bg-dark: #19031E;
+  --vb-spectrum: linear-gradient(90deg, #5A0E57 0%, #8E1E78 20%, #7B2D8E 38%, #00A9A5 58%, #21A3C4 72%, #7BBF3B 86%, #FF8C00 100%);
 }
 
 body {
-  background-color: var(--cream);
-  color: var(--ink);
+  background-color: var(--vb-bg-dark);
+  color: #FFFFFF;
   font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6, .font-display {
@@ -30,12 +37,13 @@ h1, h2, h3, h4, h5, h6, .font-display {
   letter-spacing: -0.02em;
 }
 
+/* Spectrum Brand Bar & Accents */
 .spectrum {
-  background: var(--spectrum);
+  background: var(--vb-spectrum);
 }
 
 .spectrum-text {
-  background: var(--spectrum);
+  background: var(--vb-spectrum);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -44,57 +52,198 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .rule {
   height: 4px;
   border-radius: 999px;
-  background: var(--spectrum);
+  background: var(--vb-spectrum);
 }
 
-.card-glass {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(59, 10, 50, 0.08);
+/* Glass Surface - Standard (Dark Frosted Glass Cards & Containers) */
+.glass-surface,
+.card-glass,
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 20px;
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.35);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-surface:hover,
+.card-glass-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(142, 30, 120, 0.4);
+}
+
+/* Glass Surface - Elevated (Modals, Overlays & Popovers) */
+.glass-elevated {
+  background: rgba(28, 5, 33, 0.94);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Glass Surface - Sidebar (Deep Plum Frosted Glass) */
+.glass-sidebar {
+  background: rgba(22, 3, 26, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 6px 0 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Glass Surface - Accent Tint */
+.glass-accent {
+  background: linear-gradient(135deg, rgba(142, 30, 120, 0.25) 0%, rgba(0, 169, 165, 0.15) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(142, 30, 120, 0.35);
   border-radius: 18px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+/* Surface Solid / Table Surface (Dark Glass Table Canvas) */
+.surface-solid {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Ambient Canvas Background Mesh */
+.ambient-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient-blob-1 {
+  position: absolute;
+  top: -10%;
+  left: 15%;
+  width: 55vw;
+  height: 55vw;
+  max-width: 700px;
+  max-height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(142, 30, 120, 0.32) 0%, rgba(90, 14, 87, 0.15) 45%, transparent 70%);
+  filter: blur(65px);
+}
+
+.ambient-blob-2 {
+  position: absolute;
+  top: 15%;
+  right: -5%;
+  width: 50vw;
+  height: 50vw;
+  max-width: 650px;
+  max-height: 650px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 169, 165, 0.22) 0%, rgba(33, 163, 196, 0.08) 50%, transparent 70%);
+  filter: blur(65px);
+}
+
+.ambient-blob-3 {
+  position: absolute;
+  bottom: -10%;
+  left: -5%;
+  width: 50vw;
+  height: 50vw;
+  max-width: 600px;
+  max-height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 140, 0, 0.18) 0%, rgba(123, 45, 142, 0.15) 50%, transparent 70%);
+  filter: blur(75px);
+}
+
+.ambient-blob-4 {
+  position: absolute;
+  bottom: 10%;
+  right: 25%;
+  width: 40vw;
+  height: 40vw;
+  max-width: 500px;
+  max-height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(123, 45, 142, 0.25) 0%, transparent 65%);
+  filter: blur(60px);
+}
+
+/* Premium Form Fields (Dark Frosted Pills) */
 .field {
   width: 100%;
-  background: #ffffff;
-  border: 1.5px solid rgba(59, 10, 50, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   padding: 0.65rem 0.95rem;
-  font-size: 0.95rem;
-  color: var(--ink);
+  font-size: 0.92rem;
+  color: #FFFFFF;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.field::placeholder {
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .field:focus {
-  border-color: var(--violet);
-  box-shadow: 0 0 0 3px rgba(123, 45, 142, 0.15);
+  border-color: #8E1E78;
+  box-shadow: 0 0 0 3px rgba(142, 30, 120, 0.35);
+  background: rgba(255, 255, 255, 0.09);
 }
 
+select.field option {
+  background-color: #210626;
+  color: #FFFFFF;
+}
+
+/* Premium Action Buttons */
 .btn-primary {
-  background: var(--plum);
+  background: linear-gradient(135deg, #8E1E78 0%, #5A0E57 100%);
   color: #ffffff;
-  box-shadow: 0 12px 24px -12px rgba(59, 10, 50, 0.8);
-  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px -4px rgba(142, 30, 120, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .btn-primary:hover {
-  background: var(--plum-2);
+  background: linear-gradient(135deg, #A02288 0%, #6E126A 100%);
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px -12px rgba(59, 10, 50, 0.9);
+  box-shadow: 0 12px 28px -4px rgba(142, 30, 120, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-ghost {
-  border: 1.5px solid rgba(59, 10, 50, 0.25);
-  color: var(--plum);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
 }
 
 .btn-ghost:hover {
-  border-color: var(--violet);
-  color: var(--violet);
-  background: rgba(123, 45, 142, 0.04);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(142, 30, 120, 0.5);
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+/* Accessibility & Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -6,6 +6,7 @@ import '../css/app.css';
 import { syncEngine } from './services/syncEngine';
 import { localNotificationService } from './services/localNotifications';
 import { pushNotificationService } from './services/pushNotifications';
+import { initOta } from './services/otaService';
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -15,7 +16,8 @@ app.use(router);
 
 app.mount('#app');
 
-// Initialize mobile offline sync and native notifications
+// Initialize mobile offline sync, native notifications, and OTA live updates
+initOta().catch(console.warn);
 syncEngine.init().catch(console.warn);
 localNotificationService.init().catch(console.warn);
 pushNotificationService.init().catch(console.warn);

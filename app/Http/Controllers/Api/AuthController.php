@@ -147,25 +147,52 @@ class AuthController extends Controller
 
     protected function formatUserResponse(User $user): array
     {
-        $role = $user->roleRelation;
+        $roleName = $user->role ?? 'employee';
+        $roleDisplayName = ucfirst(str_replace('_', ' ', $roleName));
+
+        $permissions = [];
+        if (method_exists($user, 'getEffectivePermissions')) {
+            $permissions = $user->getEffectivePermissions();
+        } elseif (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            $permissions = ['*'];
+        }
+
+        $visibilityScope = 'assigned_only';
+        if (method_exists($user, 'getEffectiveVisibilityScope')) {
+            $visibilityScope = $user->getEffectiveVisibilityScope();
+        } elseif (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            $visibilityScope = 'all';
+        } elseif (method_exists($user, 'isTeamLead') && $user->isTeamLead()) {
+            $visibilityScope = 'team_only';
+        }
+
+        $allowedCategories = null;
+        if (method_exists($user, 'getEffectiveAllowedCategories')) {
+            $allowedCategories = $user->getEffectiveAllowedCategories();
+        }
+
         return [
             'id' => $user->id,
             'name' => $user->name,
-            'username' => $user->username,
+            'username' => $user->username ?? explode('@', $user->email)[0],
             'email' => $user->email,
             'phone' => $user->phone,
-            'role' => $user->role,
-            'role_id' => $user->role_id,
-            'role_name' => $role?->name ?? $user->role,
-            'role_display_name' => $role?->display_name ?? ucfirst($user->role),
-            'team_id' => $user->team_id,
-            'team_name' => $user->team?->name,
+            'role' => $roleName,
+            'role_id' => $user->role_id ?? null,
+            'role_name' => $roleName,
+            'role_display_name' => $roleDisplayName,
+            'team_id' => $user->team_id ?? null,
+            'team_name' => null,
             'is_active' => (bool)$user->is_active,
             'must_change_password' => (bool)$user->must_change_password,
-            'notification_preferences' => $user->notification_preferences,
-            'permissions' => $user->getEffectivePermissions(),
-            'visibility_scope' => $user->getEffectiveVisibilityScope(),
-            'allowed_categories' => $user->getEffectiveAllowedCategories(),
+            'notification_preferences' => $user->notification_preferences ?? [],
+            'allowed_sources' => $user->allowed_sources ?? [],
+            'allowed_services' => $user->allowed_services ?? [],
+            'team_members' => $user->team_members ?? [],
+            'assignable_users' => $user->assignable_users ?? [],
+            'permissions' => $permissions,
+            'visibility_scope' => $visibilityScope,
+            'allowed_categories' => $allowedCategories,
         ];
     }
 

@@ -4,6 +4,7 @@
     "scripts": {
         "build": "vite build",
         "build:mobile": "vite build --config vite.mobile.config.ts",
+        "ota:publish": "python scripts/publish-ota.py",
         "dev": "vite"
     },
     "devDependencies": {

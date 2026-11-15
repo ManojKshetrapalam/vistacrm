@@ -103,7 +103,7 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchMe();
         return { user: this.user, token: this.token };
       } catch (err: any) {
-        this.error = err.response?.data?.message || 'Login failed. Please check credentials.';
+        this.error = err.response?.data?.message || err.response?.data?.errors?.email?.[0] || 'Login failed. Please check credentials.';
         throw err;
       } finally {
         this.loading = false;

@@ -203,7 +203,17 @@ const handleLogin = async () => {
       errorMessage.value = authStore.error || 'The provided credentials do not match our records.';
     }
   } catch (err: any) {
-    errorMessage.value = err?.message || 'Login failed. Please verify credentials.';
+    if (err.response?.data?.message) {
+      errorMessage.value = err.response.data.message;
+    } else if (err.response?.data?.errors?.email?.[0]) {
+      errorMessage.value = err.response.data.errors.email[0];
+    } else if (err.response?.status === 422) {
+      errorMessage.value = 'The provided credentials do not match our records.';
+    } else if (err.code === 'ERR_NETWORK' || !err.response) {
+      errorMessage.value = 'Unable to connect to server. Please verify your connection.';
+    } else {
+      errorMessage.value = err?.message || 'Login failed. Please verify credentials.';
+    }
   } finally {
     loading.value = false;
   }

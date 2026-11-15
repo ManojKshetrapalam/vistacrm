@@ -83,7 +83,12 @@ export const getApiBase = (): string => {
   }
 
   if (Capacitor.isNativePlatform()) {
-    return (import.meta.env.VITE_API_BASE_URL as string) || 'https://vistaboundintegrated.com/CRM/api';
+    // Native mobile app must target production API unless a non-localhost custom server is set
+    const envBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+    if (envBase && !envBase.includes('127.0.0.1') && !envBase.includes('localhost')) {
+      return envBase.replace(/\/+$/, '');
+    }
+    return 'https://vistaboundintegrated.com/CRM/api';
   }
 
   const base = getBasePath();

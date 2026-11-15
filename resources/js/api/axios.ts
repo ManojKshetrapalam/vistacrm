@@ -11,7 +11,7 @@ const api = axios.create({
     'Accept': 'application/json',
   },
   timeout: 15000,
-  withCredentials: true,
+  withCredentials: !Capacitor.isNativePlatform(),
 });
 
 api.interceptors.request.use((config) => {

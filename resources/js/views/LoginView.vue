@@ -1,14 +1,73 @@
 <template>
-  <div class="min-h-screen bg-[#18031E] flex flex-col justify-center relative overflow-hidden font-sans text-white selection:bg-vb-magenta selection:text-white">
+  <div class="min-h-screen bg-[#15021C] flex flex-col justify-center relative overflow-hidden font-sans text-white selection:bg-vb-magenta selection:text-white">
     <!-- Top Brand Spectrum Bar -->
     <div class="spectrum h-1.5 w-full fixed top-0 left-0 z-50"></div>
 
-    <!-- Ambient Gradient Lighting Mesh -->
-    <div class="ambient-canvas" aria-hidden="true">
-      <div class="ambient-blob-1"></div>
-      <div class="ambient-blob-2"></div>
-      <div class="ambient-blob-3"></div>
-      <div class="ambient-blob-4"></div>
+    <!-- Ambient Gradient Lighting Mesh & Radiant Waves -->
+    <div class="ambient-canvas pointer-events-none" aria-hidden="true">
+      <!-- Top-Left Soft Plum Ambient Aura -->
+      <div class="absolute -top-[10%] -left-[10%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-full bg-gradient-to-br from-[#8E1E78]/30 to-[#5A0E57]/15 blur-[95px]"></div>
+
+      <!-- Top-Right Intense Cyan/Teal Radiant Glow -->
+      <div class="absolute -top-[12%] right-[-8%] w-[60vw] h-[55vw] max-w-[720px] max-h-[650px] rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#00F0FF]/40 via-[#00A9A5]/30 to-transparent blur-[75px]"></div>
+
+      <!-- Center-Right Violet Diffusion -->
+      <div class="absolute top-[25%] right-[10%] w-[45vw] h-[45vw] max-w-[550px] max-h-[550px] rounded-full bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-[#8E1E78]/30 via-[#5A0E57]/20 to-transparent blur-[85px]"></div>
+
+      <!-- Bottom-Right Radiant Amber/Orange Ambient Glow -->
+      <div class="absolute bottom-[-15%] right-[-5%] w-[70vw] h-[60vw] max-w-[850px] max-h-[700px] rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#FF8C00]/50 via-[#E11D48]/35 via-[#8E1E78]/25 to-transparent blur-[80px]"></div>
+
+      <!-- Top-Right Cyan/Teal Arc Ribbon -->
+      <svg class="absolute top-0 right-0 w-[50%] h-[38%] min-h-[250px] pointer-events-none overflow-visible" viewBox="0 0 720 350" fill="none" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="cyan-arc-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.85" />
+            <stop offset="60%" stop-color="#00A9A5" stop-opacity="0.6" />
+            <stop offset="100%" stop-color="#21A3C4" stop-opacity="0.1" />
+          </linearGradient>
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="14" />
+          </filter>
+        </defs>
+        <path d="M 220 0 C 340 140, 520 160, 720 90 L 720 0 Z" fill="url(#cyan-arc-grad)" filter="url(#soft-glow)" opacity="0.6" />
+      </svg>
+
+      <!-- Bottom Silky Vector Ribbon Waves (Orange, Magenta, Plum) -->
+      <svg class="absolute bottom-0 left-0 w-full h-[58%] min-h-[420px] pointer-events-none overflow-visible" viewBox="0 0 1440 500" fill="none" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="ribbon-deep-plum" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#420640" stop-opacity="0.9" />
+            <stop offset="30%" stop-color="#6B1066" stop-opacity="0.95" />
+            <stop offset="65%" stop-color="#8E1E78" stop-opacity="0.9" />
+            <stop offset="100%" stop-color="#A21CAF" stop-opacity="0.8" />
+          </linearGradient>
+          <linearGradient id="ribbon-vibrant-orange" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#7B2D8E" stop-opacity="0.8" />
+            <stop offset="35%" stop-color="#C026D3" stop-opacity="0.9" />
+            <stop offset="68%" stop-color="#FF5500" stop-opacity="0.95" />
+            <stop offset="85%" stop-color="#FF8C00" stop-opacity="0.98" />
+            <stop offset="100%" stop-color="#FFAE00" stop-opacity="0.9" />
+          </linearGradient>
+          <linearGradient id="ribbon-crest-highlight" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="20%" stop-color="#C026D3" stop-opacity="0" />
+            <stop offset="55%" stop-color="#FF7A00" stop-opacity="0.8" />
+            <stop offset="80%" stop-color="#FFAE00" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#FFD600" stop-opacity="0.7" />
+          </linearGradient>
+          <filter id="ribbon-ambient-blur" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="8" />
+          </filter>
+        </defs>
+
+        <!-- Base Plum Flow -->
+        <path d="M -50 360 C 280 440, 560 300, 920 330 C 1180 350, 1340 260, 1500 220 L 1500 500 L -50 500 Z" fill="url(#ribbon-deep-plum)" opacity="0.85" />
+
+        <!-- Main Vibrant S-Curve Ribbon (Sweeps under and behind the login card) -->
+        <path d="M -50 410 C 320 480, 620 320, 960 270 C 1200 230, 1380 180, 1500 150 L 1500 500 L -50 500 Z" fill="url(#ribbon-vibrant-orange)" opacity="0.92" filter="url(#ribbon-ambient-blur)" />
+
+        <!-- Radiant Ribbon Crest Edge -->
+        <path d="M 320 480 C 620 320, 960 270, 1500 150" stroke="url(#ribbon-crest-highlight)" stroke-width="5" opacity="0.85" filter="url(#ribbon-ambient-blur)" />
+      </svg>
     </div>
 
     <div class="max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 relative z-10">
@@ -69,18 +128,19 @@
           </div>
         </div>
 
-        <!-- Floating Dark Glass Login Card -->
-        <div class="glass-elevated p-8 sm:p-10 relative overflow-hidden shadow-2xl">
-          <div class="h-1.5 w-full spectrum absolute top-0 left-0"></div>
+        <!-- Floating True Glass Login Card -->
+        <div class="glass-card-true p-8 sm:p-10 relative overflow-hidden">
+          <!-- Top Spectrum Accent Edge -->
+          <div class="h-[2.5px] w-full absolute top-0 left-0 bg-gradient-to-r from-[#8E1E78] via-[#00A9A5] via-[#7BBF3B] to-[#FF8C00] rounded-t-[28px]"></div>
 
           <div>
-            <h3 class="font-display font-bold text-2xl text-white">Sign in to your desk</h3>
-            <p class="text-xs text-purple-200/70 mt-1">Enter your CRM credentials to access your pipeline.</p>
+            <h3 class="font-display font-bold text-2xl text-white tracking-tight">Sign in to your desk</h3>
+            <p class="text-xs text-purple-200/80 mt-1">Enter your CRM credentials to access your pipeline.</p>
           </div>
 
           <form @submit.prevent="handleLogin" class="mt-6 space-y-4">
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5 flex items-center gap-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200/90 mb-1.5 flex items-center gap-1.5">
                 <User class="w-3.5 h-3.5 text-purple-300" />
                 <span>Username or Email Address</span>
               </label>
@@ -91,13 +151,13 @@
                   required
                   autocomplete="username"
                   placeholder="prasanna@vista.com"
-                  class="field text-sm pl-3.5 pr-3.5 py-3 rounded-xl bg-white/[0.08] border-white/15 text-white placeholder:text-white/35 focus:border-vb-magenta focus:ring-2 focus:ring-vb-magenta/30"
+                  class="glass-input text-sm pl-3.5 pr-3.5 py-3"
                 />
               </div>
             </div>
 
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200 mb-1.5 flex items-center gap-1.5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-purple-200/90 mb-1.5 flex items-center gap-1.5">
                 <Lock class="w-3.5 h-3.5 text-purple-300" />
                 <span>Password</span>
               </label>
@@ -108,12 +168,12 @@
                   required
                   autocomplete="current-password"
                   placeholder="••••••••"
-                  class="field text-sm pl-3.5 pr-11 py-3 rounded-xl bg-white/[0.08] border-white/15 text-white placeholder:text-white/35 focus:border-vb-magenta focus:ring-2 focus:ring-vb-magenta/30"
+                  class="glass-input text-sm pl-3.5 pr-11 py-3"
                 />
                 <button
                   type="button"
                   @click="showPassword = !showPassword"
-                  class="absolute right-3.5 top-1/2 -translate-y-1/2 text-purple-300 hover:text-white transition-colors"
+                  class="absolute right-3.5 top-1/2 -translate-y-1/2 text-purple-200/70 hover:text-white transition-colors"
                   :title="showPassword ? 'Hide password' : 'Show password'"
                 >
                   <EyeOff v-if="showPassword" class="w-4 h-4" />
@@ -134,7 +194,7 @@
             <button
               type="submit"
               :disabled="loading"
-              class="w-full btn-primary text-sm font-semibold py-3 px-6 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-vb-plum/60 disabled:opacity-60 transition-all cursor-pointer mt-2"
+              class="w-full btn-primary text-sm font-semibold py-3 px-6 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#8E1E78]/50 disabled:opacity-60 transition-all cursor-pointer mt-2"
             >
               <span v-if="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
               <span>{{ loading ? 'Authenticating...' : 'Sign In to CRM' }}</span>
@@ -143,14 +203,14 @@
           </form>
 
           <div class="mt-5 text-center">
-            <span class="text-xs text-purple-200/60 hover:text-white transition-colors cursor-pointer">
+            <span class="text-xs text-purple-200/70 hover:text-white transition-colors cursor-pointer">
               Forgot your password?
             </span>
           </div>
 
-          <div class="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-purple-200/50">
+          <div class="mt-6 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-purple-200/60">
             <div class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
               <span>Production Endpoint</span>
             </div>
             <span>vistaboundintegrated.com</span>

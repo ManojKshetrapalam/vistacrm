@@ -151,33 +151,26 @@ class Lead extends Model
             return $query->whereRaw('0 = 1');
         }
 
-        // Apply category filter if user has explicit restrictions
-        $allowedCats = $user->getEffectiveAllowedCategories();
-        if ($allowedCats !== null) {
-            $normalizedAllowed = array_values(array_filter(array_map([static::class, 'normalizeCategory'], $allowedCats)));
-            if (empty($normalizedAllowed)) {
-                $query->whereRaw('0 = 1');
-            } else {
-                $placeholders = implode(',', array_fill(0, count($normalizedAllowed), '?'));
-                $query->whereNotNull('service_interest')
-                      ->whereRaw("TRIM(service_interest) != ''")
-                      ->whereRaw("LOWER(TRIM(service_interest)) IN ({$placeholders})", $normalizedAllowed);
-            }
+        // 1. Role-based assignment / team delegation scope
+        if ($user->isTeamLead()) {
+            $teamMemberIds = $user->getTeamMemberIds();
+            $query->whereIn('assigned_to', $teamMemberIds);
+        } else {
+            // Employee: restricted strictly to own assigned leads
+            $query->where('assigned_to', $user->id);
         }
 
-        // Apply visibility scope
-        $scope = $user->getEffectiveVisibilityScope();
-        if ($scope === 'all') {
-            return $query;
+        // 2. Allowed Sources (mandatory filter when configured)
+        if (!empty($user->allowed_sources) && is_array($user->allowed_sources)) {
+            $query->whereIn('source', $user->allowed_sources);
         }
 
-        if ($scope === 'team_only') {
-            $teamMemberIds = $user->teamMemberIds();
-            return $query->whereIn('assigned_to', $teamMemberIds);
+        // 3. Allowed Services (optional filter when configured)
+        if (!empty($user->allowed_services) && is_array($user->allowed_services)) {
+            $query->whereIn('service_interest', $user->allowed_services);
         }
 
-        // Invariant default: assigned_only
-        return $query->where('assigned_to', $user->id);
+        return $query;
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

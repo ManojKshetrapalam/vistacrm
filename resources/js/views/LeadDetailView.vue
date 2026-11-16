@@ -124,10 +124,11 @@
               v-if="!lead.is_archived"
               type="button"
               @click="whatsAppModalOpen = true"
-              class="col-span-1 px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-600 to-vb-green hover:opacity-95 text-white shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 sm:gap-2 transition-all whitespace-nowrap active:scale-95 cursor-pointer"
+              class="col-span-1 px-2.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-600 to-vb-green hover:opacity-95 text-white shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 cursor-pointer min-w-0"
+              title="Connect via WhatsApp"
             >
               <MessageSquare class="w-4 h-4 shrink-0" />
-              <span>WhatsApp Connect</span>
+              <span class="truncate">WhatsApp <span class="hidden sm:inline">Connect</span></span>
             </button>
 
             <!-- Call Log Action -->
@@ -135,10 +136,11 @@
               v-if="!lead.is_archived"
               type="button"
               @click="callModalOpen = true"
-              class="col-span-1 btn-primary px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap active:scale-95 cursor-pointer"
+              class="col-span-1 btn-primary px-2.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm active:scale-95 cursor-pointer min-w-0"
+              title="Log Call"
             >
               <PhoneCall class="w-4 h-4 shrink-0" />
-              <span>Log Call</span>
+              <span class="truncate">Log Call</span>
             </button>
 
             <!-- Schedule Follow-up -->
@@ -146,22 +148,23 @@
               v-if="!lead.is_archived"
               type="button"
               @click="followUpModalOpen = true"
-              class="col-span-1 btn-ghost px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap active:scale-95 cursor-pointer"
+              class="col-span-1 btn-ghost px-2.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 active:scale-95 cursor-pointer min-w-0"
+              title="Schedule Follow-up"
             >
               <CalendarClock class="w-4 h-4 text-vb-orange shrink-0" />
-              <span>Schedule Follow-up</span>
+              <span class="truncate">Schedule <span class="hidden sm:inline">Follow-up</span></span>
             </button>
 
             <!-- Actions Dropdown Menu -->
-            <div class="col-span-1 sm:col-auto">
+            <div class="col-span-1 sm:col-auto min-w-0">
               <ActionMenu
                 :items="getDetailActions()"
                 title="More Lead Options"
-                trigger-class="w-full sm:w-auto px-3 py-2.5 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-white/10 border border-white/15 hover:border-white/30 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all whitespace-nowrap active:scale-95 cursor-pointer"
+                trigger-class="w-full sm:w-auto px-2.5 py-2.5 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-white/10 border border-white/15 hover:border-white/30 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer min-w-0"
               >
                 <template #trigger>
                   <MoreVertical class="w-4 h-4 shrink-0" />
-                  <span class="inline">Options</span>
+                  <span class="truncate">Options</span>
                 </template>
               </ActionMenu>
             </div>

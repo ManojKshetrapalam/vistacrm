@@ -59,20 +59,26 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .glass-surface,
 .card-glass,
 .glass-card {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 20px;
-  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.35);
+  box-shadow: 
+    0 16px 36px 0 rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.08);
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-surface:hover,
 .card-glass-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 42px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  border-color: rgba(142, 30, 120, 0.4);
+  box-shadow: 
+    0 24px 48px -10px rgba(0, 0, 0, 0.55), 
+    0 0 25px -5px rgba(142, 30, 120, 0.25),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 /* Glass Surface - True Glassmorphism (Transparent Frosted Glass Panels) */
@@ -120,11 +126,11 @@ h1, h2, h3, h4, h5, h6, .font-display {
 
 /* Glass Surface - Sidebar (Deep Plum Frosted Glass) */
 .glass-sidebar {
-  background: rgba(22, 3, 26, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 6px 0 32px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(180deg, rgba(30, 5, 36, 0.78) 0%, rgba(18, 2, 22, 0.88) 100%);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 8px 0 36px rgba(0, 0, 0, 0.45);
 }
 
 /* Glass Surface - Accent Tint */
@@ -138,12 +144,12 @@ h1, h2, h3, h4, h5, h6, .font-display {
 
 /* Surface Solid / Table Surface (Dark Glass Table Canvas) */
 .surface-solid {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* Ambient Canvas Background Mesh */
@@ -158,53 +164,53 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .ambient-blob-1 {
   position: absolute;
   top: -10%;
-  left: 15%;
+  left: 10%;
   width: 55vw;
   height: 55vw;
   max-width: 700px;
   max-height: 700px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(142, 30, 120, 0.32) 0%, rgba(90, 14, 87, 0.15) 45%, transparent 70%);
-  filter: blur(65px);
+  background: radial-gradient(circle, rgba(142, 30, 120, 0.35) 0%, rgba(90, 14, 87, 0.18) 45%, transparent 70%);
+  filter: blur(75px);
 }
 
 .ambient-blob-2 {
   position: absolute;
-  top: 15%;
+  top: 10%;
   right: -5%;
-  width: 50vw;
-  height: 50vw;
-  max-width: 650px;
-  max-height: 650px;
+  width: 52vw;
+  height: 52vw;
+  max-width: 680px;
+  max-height: 680px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 169, 165, 0.22) 0%, rgba(33, 163, 196, 0.08) 50%, transparent 70%);
-  filter: blur(65px);
+  background: radial-gradient(circle, rgba(0, 229, 255, 0.28) 0%, rgba(0, 169, 165, 0.22) 40%, rgba(33, 163, 196, 0.1) 60%, transparent 75%);
+  filter: blur(75px);
 }
 
 .ambient-blob-3 {
   position: absolute;
   bottom: -10%;
-  left: -5%;
-  width: 50vw;
-  height: 50vw;
-  max-width: 600px;
-  max-height: 600px;
+  right: -5%;
+  width: 55vw;
+  height: 55vw;
+  max-width: 700px;
+  max-height: 700px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 140, 0, 0.18) 0%, rgba(123, 45, 142, 0.15) 50%, transparent 70%);
-  filter: blur(75px);
+  background: radial-gradient(circle, rgba(255, 140, 0, 0.28) 0%, rgba(225, 29, 72, 0.18) 40%, rgba(142, 30, 120, 0.15) 60%, transparent 75%);
+  filter: blur(80px);
 }
 
 .ambient-blob-4 {
   position: absolute;
-  bottom: 10%;
-  right: 25%;
-  width: 40vw;
-  height: 40vw;
-  max-width: 500px;
-  max-height: 500px;
+  bottom: 5%;
+  left: 20%;
+  width: 45vw;
+  height: 45vw;
+  max-width: 550px;
+  max-height: 550px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(123, 45, 142, 0.25) 0%, transparent 65%);
-  filter: blur(60px);
+  background: radial-gradient(circle, rgba(123, 45, 142, 0.25) 0%, rgba(90, 14, 87, 0.12) 50%, transparent 70%);
+  filter: blur(70px);
 }
 
 /* Premium Form Fields (Dark Frosted Pills) */

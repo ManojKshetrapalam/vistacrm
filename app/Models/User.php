@@ -117,6 +117,15 @@ class User extends Authenticatable
         return 'assigned_only';
     }
 
+    public function getEffectiveAllowedCategories(): ?array
+    {
+        if ($this->isAdmin()) {
+            return null;
+        }
+
+        return !empty($this->allowed_services) && is_array($this->allowed_services) ? $this->allowed_services : null;
+    }
+
     /**
      * Get team member user IDs whose leads this team lead can supervise (always includes self).
      *

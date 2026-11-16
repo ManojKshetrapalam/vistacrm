@@ -351,7 +351,7 @@
         </header>
 
         <!-- Dynamic Page View -->
-        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-32 lg:pb-8">
           <slot />
         </main>
       </div>
@@ -360,7 +360,7 @@
     <!-- Mobile Bottom Navigation Bar (Figma Design) -->
     <nav
       v-if="!mobileSidebarOpen && !mobileMoreSheetOpen"
-      class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15021B]/95 backdrop-blur-2xl border-t border-white/10 px-3 py-2 flex items-center justify-around shadow-2xl"
+      class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15021B]/90 backdrop-blur-2xl border-t border-white/12 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shadow-2xl"
     >
       <router-link
         to="/dashboard"

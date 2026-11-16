@@ -100,7 +100,8 @@ class LeadController extends Controller
     public function show(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $canViewArchived = $user->isAdmin() || $user->hasPermission('leads.archive') || $user->hasPermission('leads.restore');
+        $canViewArchived = (method_exists($user, 'isAdmin') && $user->isAdmin()) 
+            || (method_exists($user, 'hasPermission') && ($user->hasPermission('leads.archive') || $user->hasPermission('leads.restore')));
         $query = $canViewArchived ? Lead::withTrashed() : Lead::query();
         $lead = $query->findOrFail($id);
 
@@ -120,6 +121,22 @@ class LeadController extends Controller
 
         $data = $lead->toArray();
         $data['is_archived'] = $lead->trashed();
+
+        // Determine adjacent accessible leads for previous/next navigation
+        $baseAccessibleQuery = Lead::accessibleBy($user);
+        if (!$canViewArchived) {
+            $baseAccessibleQuery->whereNull('deleted_at');
+        }
+
+        $data['prev_lead_id'] = (clone $baseAccessibleQuery)
+            ->where('id', '<', $lead->id)
+            ->orderBy('id', 'desc')
+            ->value('id');
+
+        $data['next_lead_id'] = (clone $baseAccessibleQuery)
+            ->where('id', '>', $lead->id)
+            ->orderBy('id', 'asc')
+            ->value('id');
 
         return response()->json($data);
     }

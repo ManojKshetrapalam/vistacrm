@@ -166,110 +166,198 @@
           </div>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-white/[0.04] border-b border-white/10 text-purple-200 font-bold uppercase tracking-wider text-[11px]">
-              <tr>
-                <th class="py-3.5 px-4">Reference</th>
-                <th class="py-3.5 px-4">Client / Contact</th>
-                <th class="py-3.5 px-4">Company &amp; Service</th>
-                <th class="py-3.5 px-4">Status</th>
-                <th class="py-3.5 px-4">Priority</th>
-                <th class="py-3.5 px-4">Representative</th>
-                <th class="py-3.5 px-4">{{ viewArchived ? 'Archived On' : 'Next Follow-up' }}</th>
-                <th class="py-3.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-white/5">
-              <tr
-                v-for="lead in leads"
-                :key="lead.id"
-                class="hover:bg-white/[0.04] transition-colors group"
-                :class="viewArchived ? 'opacity-85' : ''"
-              >
-                <!-- Reference ID -->
-                <td class="py-3.5 px-4 font-mono font-bold text-vb-magenta">
-                  <router-link :to="`/leads/${lead.id}`" class="hover:underline">
-                    {{ lead.reference_id }}
-                  </router-link>
-                </td>
+        <div v-else>
+          <!-- Desktop Table View (>= lg) -->
+          <div class="hidden lg:block overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-white/[0.04] border-b border-white/10 text-purple-200 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th class="py-3.5 px-4">Reference</th>
+                  <th class="py-3.5 px-4">Client / Contact</th>
+                  <th class="py-3.5 px-4">Company &amp; Service</th>
+                  <th class="py-3.5 px-4">Status</th>
+                  <th class="py-3.5 px-4">Priority</th>
+                  <th class="py-3.5 px-4">Representative</th>
+                  <th class="py-3.5 px-4">{{ viewArchived ? 'Archived On' : 'Next Follow-up' }}</th>
+                  <th class="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                <tr
+                  v-for="lead in leads"
+                  :key="lead.id"
+                  class="hover:bg-white/[0.04] transition-colors group"
+                  :class="viewArchived ? 'opacity-85' : ''"
+                >
+                  <!-- Reference ID -->
+                  <td class="py-3.5 px-4 font-mono font-bold text-vb-magenta">
+                    <router-link :to="`/leads/${lead.id}`" class="hover:underline">
+                      {{ lead.reference_id }}
+                    </router-link>
+                  </td>
 
-                <!-- Contact Info -->
-                <td class="py-3.5 px-4">
-                  <router-link :to="`/leads/${lead.id}`" class="font-bold text-white block hover:text-vb-cyan transition-colors">
-                    {{ lead.name }}
-                  </router-link>
-                  <span class="text-purple-200/60 font-medium text-[11px] block mt-0.5">
-                    {{ lead.phone }}
-                  </span>
-                </td>
+                  <!-- Contact Info -->
+                  <td class="py-3.5 px-4">
+                    <router-link :to="`/leads/${lead.id}`" class="font-bold text-white block hover:text-vb-cyan transition-colors">
+                      {{ lead.name }}
+                    </router-link>
+                    <span class="text-purple-200/60 font-medium text-[11px] block mt-0.5">
+                      {{ lead.phone }}
+                    </span>
+                  </td>
 
-                <!-- Company & Service Interest -->
-                <td class="py-3.5 px-4">
-                  <span class="font-semibold text-white/90 block truncate max-w-[180px]">
-                    {{ lead.company_name || 'Individual / Direct' }}
-                  </span>
-                  <span class="text-[11px] text-purple-200/70 block mt-0.5 truncate max-w-[180px]">
-                    {{ lead.service_interest || 'General Consultation' }}
-                  </span>
-                </td>
+                  <!-- Company & Service Interest -->
+                  <td class="py-3.5 px-4">
+                    <span class="font-semibold text-white/90 block truncate max-w-[180px]">
+                      {{ lead.company_name || 'Individual / Direct' }}
+                    </span>
+                    <span class="text-[11px] text-purple-200/70 block mt-0.5 truncate max-w-[180px]">
+                      {{ lead.service_interest || 'General Consultation' }}
+                    </span>
+                  </td>
 
-                <!-- Status Badge -->
-                <td class="py-3.5 px-4">
-                  <span v-if="viewArchived" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/10 text-white border border-white/20">
+                  <!-- Status Badge -->
+                  <td class="py-3.5 px-4">
+                    <span v-if="viewArchived" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/10 text-white border border-white/20">
+                      Archived
+                    </span>
+                    <StatusBadge v-else :status="lead.status" />
+                  </td>
+
+                  <!-- Priority Badge -->
+                  <td class="py-3.5 px-4">
+                    <PriorityBadge :priority="lead.priority" />
+                  </td>
+
+                  <!-- Assigned Representative -->
+                  <td class="py-3.5 px-4">
+                    <div v-if="lead.assigned_employee" class="flex items-center gap-2">
+                      <div class="w-6 h-6 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white text-[10px] font-bold flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
+                        {{ lead.assigned_employee.name[0] }}
+                      </div>
+                      <span class="text-white/90 font-semibold truncate max-w-[120px]">
+                        {{ lead.assigned_employee.name }}
+                      </span>
+                    </div>
+                    <span v-else class="text-purple-200/50 text-[11px] italic">Unassigned</span>
+                  </td>
+
+                  <!-- Next Follow-up or Archived Date -->
+                  <td class="py-3.5 px-4">
+                    <span v-if="viewArchived" class="text-[11px] text-purple-200/70 font-mono">
+                      {{ formatDateTime(lead.deleted_at) }}
+                    </span>
+                    <div v-else-if="lead.next_follow_up_date">
+                      <span
+                        class="font-semibold text-[11px] block"
+                        :class="isOverdue(lead.next_follow_up_date) ? 'text-rose-400 font-bold' : 'text-purple-100'"
+                      >
+                        {{ formatDateTime(lead.next_follow_up_date) }}
+                      </span>
+                    </div>
+                    <span v-else class="text-[11px] text-purple-200/50 italic">None scheduled</span>
+                  </td>
+
+                  <!-- Row Actions -->
+                  <td class="py-3.5 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <ActionMenu :items="getLeadActions(lead)" />
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile Cards View (< lg) -->
+          <div class="lg:hidden divide-y divide-white/10">
+            <div
+              v-for="lead in leads"
+              :key="lead.id"
+              class="p-4 hover:bg-white/[0.03] transition-colors space-y-3"
+              :class="viewArchived ? 'opacity-85' : ''"
+            >
+              <!-- Card Top Row: Ref ID + Badges -->
+              <div class="flex items-center justify-between gap-2">
+                <router-link
+                  :to="`/leads/${lead.id}`"
+                  class="font-mono text-xs font-bold text-vb-magenta bg-vb-magenta/20 border border-vb-magenta/30 px-2 py-0.5 rounded-md hover:underline"
+                >
+                  {{ lead.reference_id }}
+                </router-link>
+
+                <div class="flex items-center gap-1.5">
+                  <span v-if="viewArchived" class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-white/10 text-white border border-white/20">
                     Archived
                   </span>
                   <StatusBadge v-else :status="lead.status" />
-                </td>
-
-                <!-- Priority Badge -->
-                <td class="py-3.5 px-4">
                   <PriorityBadge :priority="lead.priority" />
-                </td>
+                </div>
+              </div>
 
-                <!-- Assigned Representative -->
-                <td class="py-3.5 px-4">
-                  <div v-if="lead.assigned_employee" class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white text-[10px] font-bold flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
+              <!-- Card Middle: Name, Company, Service -->
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <router-link
+                    :to="`/leads/${lead.id}`"
+                    class="font-bold text-sm text-white hover:text-vb-cyan transition-colors block truncate"
+                  >
+                    {{ lead.name }}
+                  </router-link>
+                  <p class="text-xs text-purple-200/70 truncate mt-0.5">
+                    {{ lead.company_name || 'Individual / Direct' }}
+                    <span v-if="lead.service_interest" class="text-vb-cyan"> · {{ lead.service_interest }}</span>
+                  </p>
+                </div>
+
+                <router-link
+                  :to="`/leads/${lead.id}`"
+                  class="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-purple-200 hover:text-white transition-colors shrink-0"
+                  title="View Lead Details"
+                >
+                  <ChevronRight class="w-4 h-4" />
+                </router-link>
+              </div>
+
+              <!-- Card Bottom: Phone, Rep, Follow-up & Quick Actions -->
+              <div class="pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                  <a
+                    :href="'tel:' + lead.phone"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[11px] hover:bg-emerald-500/25 transition-colors"
+                  >
+                    <Phone class="w-3 h-3" />
+                    <span>{{ lead.phone }}</span>
+                  </a>
+
+                  <div v-if="lead.assigned_employee" class="flex items-center gap-1.5 text-purple-200/80 text-[11px]">
+                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white text-[9px] font-bold flex items-center justify-center shrink-0 border border-white/20">
                       {{ lead.assigned_employee.name[0] }}
                     </div>
-                    <span class="text-white/90 font-semibold truncate max-w-[120px]">
-                      {{ lead.assigned_employee.name }}
-                    </span>
+                    <span class="truncate max-w-[100px]">{{ lead.assigned_employee.name }}</span>
                   </div>
-                  <span v-else class="text-purple-200/50 text-[11px] italic">Unassigned</span>
-                </td>
+                </div>
 
-                <!-- Next Follow-up or Archived Date -->
-                <td class="py-3.5 px-4">
-                  <span v-if="viewArchived" class="text-[11px] text-purple-200/70 font-mono">
-                    {{ formatDateTime(lead.deleted_at) }}
-                  </span>
-                  <div v-else-if="lead.next_follow_up_date">
+                <div class="flex items-center gap-2">
+                  <div v-if="!viewArchived && lead.next_follow_up_date" class="text-[10px]">
                     <span
-                      class="font-semibold text-[11px] block"
-                      :class="isOverdue(lead.next_follow_up_date) ? 'text-rose-400 font-bold' : 'text-purple-100'"
+                      class="px-2 py-0.5 rounded-full font-semibold border"
+                      :class="isOverdue(lead.next_follow_up_date) ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : 'bg-white/10 text-purple-200 border-white/15'"
                     >
                       {{ formatDateTime(lead.next_follow_up_date) }}
                     </span>
                   </div>
-                  <span v-else class="text-[11px] text-purple-200/50 italic">None scheduled</span>
-                </td>
 
-                <!-- Row Actions -->
-                <td class="py-3.5 px-4 text-right">
-                  <div class="flex items-center justify-end gap-1.5">
-                    <ActionMenu :items="getLeadActions(lead)" />
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  <ActionMenu :items="getLeadActions(lead)" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Pagination Bar -->
-        <div v-if="pagination.total > pagination.per_page" class="p-4 border-t border-white/10 bg-white/[0.02] flex items-center justify-between text-xs">
-          <span class="text-purple-200/70">
+        <div v-if="pagination.total > pagination.per_page" class="p-4 border-t border-white/10 bg-white/[0.02] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <span class="text-purple-200/70 text-center sm:text-left">
             Showing {{ ((pagination.current_page - 1) * pagination.per_page) + 1 }} to
             {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
             <strong class="text-white">{{ pagination.total }}</strong> leads
@@ -279,7 +367,7 @@
             <button
               :disabled="pagination.current_page <= 1"
               @click="changePage(pagination.current_page - 1)"
-              class="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 transition-colors"
+              class="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 transition-colors cursor-pointer"
             >
               Previous
             </button>
@@ -287,7 +375,7 @@
             <button
               :disabled="pagination.current_page >= pagination.last_page"
               @click="changePage(pagination.current_page + 1)"
-              class="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 transition-colors"
+              class="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 transition-colors cursor-pointer"
             >
               Next
             </button>
@@ -376,6 +464,8 @@ import {
   CalendarClock,
   RotateCcw,
   Trash2,
+  Phone,
+  ChevronRight,
 } from 'lucide-vue-next';
 
 const authStore = useAuthStore();

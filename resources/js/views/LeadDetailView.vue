@@ -15,18 +15,56 @@
       </div>
 
       <div v-else class="space-y-6">
-        <!-- Breadcrumb & Back -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-xs text-purple-200/60">
-            <router-link to="/leads" class="hover:text-white font-medium">Leads</router-link>
-            <span>/</span>
-            <span class="text-white font-bold font-mono">{{ lead.reference_id }}</span>
+        <!-- Top Navigation Bar: Breadcrumb, Table Return & Prev/Next Lead Pagers -->
+        <div class="glass-surface p-3 sm:p-4 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div class="flex items-center gap-3">
+            <router-link
+              to="/leads"
+              class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-all border border-white/15 shadow-xs"
+            >
+              <ArrowLeft class="w-3.5 h-3.5 text-vb-cyan" />
+              <span>Back to Leads Table</span>
+            </router-link>
+
+            <div class="hidden sm:flex items-center gap-2 text-xs text-purple-200/60 pl-2 border-l border-white/10">
+              <router-link to="/leads" class="hover:text-white font-medium">Leads</router-link>
+              <span>/</span>
+              <span class="text-white font-bold font-mono">{{ lead.reference_id }}</span>
+            </div>
           </div>
 
-          <router-link to="/leads" class="text-xs font-semibold text-vb-cyan hover:underline flex items-center gap-1">
-            <ArrowLeft class="w-3.5 h-3.5" />
-            <span>Back to pipeline</span>
-          </router-link>
+          <!-- Lead Paging: Previous & Next -->
+          <div class="flex items-center justify-between sm:justify-end gap-2 border-t sm:border-t-0 pt-2.5 sm:pt-0 border-white/10">
+            <span class="sm:hidden text-xs font-mono font-bold text-vb-magenta">
+              {{ lead.reference_id }}
+            </span>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="navigateToLead(lead.prev_lead_id)"
+                :disabled="!lead.prev_lead_id"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs"
+                :class="lead.prev_lead_id ? 'bg-white/10 hover:bg-white/20 text-white border-white/20 cursor-pointer active:scale-95' : 'bg-white/5 text-purple-200/30 border-white/5 cursor-not-allowed'"
+                title="Navigate to previous accessible lead"
+              >
+                <ChevronLeft class="w-4 h-4" />
+                <span>Previous Lead</span>
+              </button>
+
+              <button
+                type="button"
+                @click="navigateToLead(lead.next_lead_id)"
+                :disabled="!lead.next_lead_id"
+                class="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs"
+                :class="lead.next_lead_id ? 'bg-white/10 hover:bg-white/20 text-white border-white/20 cursor-pointer active:scale-95' : 'bg-white/5 text-purple-200/30 border-white/5 cursor-not-allowed'"
+                title="Navigate to next accessible lead"
+              >
+                <span>Next Lead</span>
+                <ChevronRight class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Archived Banner -->
@@ -80,15 +118,15 @@
           </div>
 
           <!-- Quick Action Buttons & Actions Menu -->
-          <div class="flex flex-wrap items-center gap-2.5 relative z-10">
+          <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 relative z-10 w-full sm:w-auto">
             <!-- WhatsApp Action -->
             <button
               v-if="!lead.is_archived"
               type="button"
               @click="whatsAppModalOpen = true"
-              class="px-4.5 py-2.5 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-600 to-vb-green hover:opacity-95 text-white shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all"
+              class="col-span-1 px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-600 to-vb-green hover:opacity-95 text-white shadow-md shadow-emerald-600/30 flex items-center justify-center gap-1.5 sm:gap-2 transition-all whitespace-nowrap active:scale-95 cursor-pointer"
             >
-              <MessageSquare class="w-4 h-4" />
+              <MessageSquare class="w-4 h-4 shrink-0" />
               <span>WhatsApp Connect</span>
             </button>
 
@@ -97,9 +135,9 @@
               v-if="!lead.is_archived"
               type="button"
               @click="callModalOpen = true"
-              class="btn-primary px-4.5 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2 shadow-sm"
+              class="col-span-1 btn-primary px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap active:scale-95 cursor-pointer"
             >
-              <PhoneCall class="w-4 h-4" />
+              <PhoneCall class="w-4 h-4 shrink-0" />
               <span>Log Call</span>
             </button>
 
@@ -108,23 +146,25 @@
               v-if="!lead.is_archived"
               type="button"
               @click="followUpModalOpen = true"
-              class="btn-ghost px-4.5 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2"
+              class="col-span-1 btn-ghost px-3 py-2.5 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap active:scale-95 cursor-pointer"
             >
-              <CalendarClock class="w-4 h-4 text-vb-orange" />
+              <CalendarClock class="w-4 h-4 text-vb-orange shrink-0" />
               <span>Schedule Follow-up</span>
             </button>
 
             <!-- Actions Dropdown Menu -->
-            <ActionMenu
-              :items="getDetailActions()"
-              title="More Lead Options"
-              trigger-class="px-3.5 py-2.5 rounded-full bg-white/10 border border-white/15 hover:border-white/30 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-            >
-              <template #trigger>
-                <MoreVertical class="w-4 h-4" />
-                <span class="hidden sm:inline">Options</span>
-              </template>
-            </ActionMenu>
+            <div class="col-span-1 sm:col-auto">
+              <ActionMenu
+                :items="getDetailActions()"
+                title="More Lead Options"
+                trigger-class="w-full sm:w-auto px-3 py-2.5 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-full bg-white/10 border border-white/15 hover:border-white/30 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all whitespace-nowrap active:scale-95 cursor-pointer"
+              >
+                <template #trigger>
+                  <MoreVertical class="w-4 h-4 shrink-0" />
+                  <span class="inline">Options</span>
+                </template>
+              </ActionMenu>
+            </div>
           </div>
         </div>
 
@@ -457,7 +497,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import api from '../api/axios';
@@ -474,6 +514,8 @@ import EditLeadModal from '../components/EditLeadModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Phone,
   PhoneCall,
   CalendarClock,
@@ -518,6 +560,20 @@ const reassigning = ref(false);
 
 const newNoteText = ref('');
 const savingNote = ref(false);
+
+const navigateToLead = (targetId: number | string | null | undefined) => {
+  if (!targetId) return;
+  router.push(`/leads/${targetId}`);
+};
+
+watch(
+  () => route.params.id,
+  (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      fetchLead();
+    }
+  }
+);
 
 const fetchLead = async () => {
   const id = route.params.id;

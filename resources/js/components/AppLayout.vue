@@ -15,13 +15,13 @@
       <!-- Mobile Sidebar Overlay -->
       <div
         v-if="mobileSidebarOpen"
-        class="fixed inset-0 z-40 bg-black/70 backdrop-blur-md lg:hidden transition-opacity"
+        class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md lg:hidden transition-opacity"
         @click="mobileSidebarOpen = false"
       ></div>
 
       <!-- Glass Sidebar (Deep Dark Plum Frosted Glass) -->
       <aside
-        class="fixed inset-y-0 left-0 z-40 w-64 glass-sidebar flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] glass-sidebar flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0"
         :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'"
       >
         <!-- Logo Area -->
@@ -169,7 +169,7 @@
         </nav>
 
         <!-- User Profile Pill in Sidebar Footer -->
-        <div class="p-3 border-t border-white/10 bg-black/35">
+        <div class="p-3.5 border-t border-white/10 bg-black/35 space-y-2">
           <div class="p-2.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md flex items-center justify-between">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
@@ -188,6 +188,15 @@
               <LogOut class="w-4 h-4" />
             </button>
           </div>
+
+          <!-- Prominent Full-Width Mobile Logout Button -->
+          <button
+            @click="handleLogout"
+            class="w-full py-2 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+          >
+            <LogOut class="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </aside>
 
@@ -269,21 +278,67 @@
               ></span>
             </router-link>
 
-            <!-- User Pill in Topbar (From Mockup) -->
-            <div class="flex items-center gap-2.5 pl-2 border-l border-white/10">
-              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
-                {{ userInitials }}
-              </div>
-              <div class="hidden xl:block text-left text-xs leading-tight">
-                <span class="font-bold text-white block">{{ authStore.user?.name }}</span>
-                <span class="text-[10px] text-purple-200/60 block">{{ authStore.isAdmin ? 'Sales Director' : (authStore.isTeamLead ? 'Sales Manager' : 'Client Advisor') }}</span>
+            <!-- Interactive User Dropdown in Topbar -->
+            <div class="relative" ref="userDropdownRef">
+              <button
+                type="button"
+                @click="userMenuOpen = !userMenuOpen"
+                class="flex items-center gap-2.5 pl-2 border-l border-white/10 focus:outline-none group cursor-pointer"
+                aria-label="User Account Menu"
+              >
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm group-hover:scale-105 transition-transform">
+                  {{ userInitials }}
+                </div>
+                <div class="hidden xl:block text-left text-xs leading-tight">
+                  <span class="font-bold text-white block">{{ authStore.user?.name }}</span>
+                  <span class="text-[10px] text-purple-200/60 block">{{ authStore.isAdmin ? 'Administrator' : (authStore.isTeamLead ? 'Team Lead' : 'Client Advisor') }}</span>
+                </div>
+              </button>
+
+              <!-- Dropdown Menu -->
+              <div
+                v-if="userMenuOpen"
+                class="absolute right-0 mt-2 w-64 rounded-2xl bg-[#1D0324]/95 border border-white/15 backdrop-blur-2xl shadow-2xl p-3 z-50 space-y-3"
+              >
+                <div class="flex items-center gap-3 pb-2.5 border-b border-white/10">
+                  <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-sm flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
+                    {{ userInitials }}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold text-white truncate">{{ authStore.user?.name }}</p>
+                    <p class="text-[11px] text-purple-200/60 truncate">{{ authStore.user?.email }}</p>
+                    <span class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-vb-magenta/20 border border-vb-magenta/40 text-pink-200">
+                      {{ authStore.isAdmin ? 'Administrator' : (authStore.isTeamLead ? 'Team Lead' : 'Solutions Desk') }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="space-y-1">
+                  <router-link
+                    v-if="authStore.isAdmin"
+                    to="/settings"
+                    @click="userMenuOpen = false"
+                    class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <Settings class="w-4 h-4 text-purple-300" />
+                    <span>CRM Settings</span>
+                  </router-link>
+                  <button
+                    type="button"
+                    @click="handleLogout"
+                    class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/15 border border-transparent hover:border-rose-500/30 transition-all text-left cursor-pointer"
+                  >
+                    <LogOut class="w-4 h-4 text-rose-400" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </header>
 
         <!-- Dynamic Page View -->
-        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
+        <main class="flex-1 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8">
           <slot />
         </main>
       </div>
@@ -399,6 +454,8 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const mobileSidebarOpen = ref(false);
+const userMenuOpen = ref(false);
+const userDropdownRef = ref<HTMLElement | null>(null);
 const logoUrl = ref('/favicon.jpg');
 const isSyncing = ref(false);
 const pendingCount = ref(0);
@@ -495,12 +552,20 @@ const onReminderReschedule = () => {
   fetchLivePollData();
 };
 
+const onWindowClick = (e: MouseEvent) => {
+  if (userDropdownRef.value && !userDropdownRef.value.contains(e.target as Node)) {
+    userMenuOpen.value = false;
+  }
+};
+
 onMounted(async () => {
+  window.addEventListener('click', onWindowClick);
   await fetchLivePollData();
   pollingInterval = setInterval(fetchLivePollData, 30000);
 });
 
 onUnmounted(() => {
+  window.removeEventListener('click', onWindowClick);
   if (pollingInterval) clearInterval(pollingInterval);
 });
 </script>

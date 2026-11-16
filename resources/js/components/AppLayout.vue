@@ -166,10 +166,23 @@
               class="w-2 h-2 rounded-full bg-vb-cyan shadow-sm shadow-vb-cyan"
             ></span>
           </router-link>
+
+          <!-- Direct Sign Out Option in Scrollable Nav -->
+          <div class="pt-4 pb-1.5 px-3.5 border-t border-white/10 mt-2">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-rose-300/60">Account Session</span>
+          </div>
+          <button
+            type="button"
+            @click="handleLogout"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-rose-300 hover:text-rose-200 hover:bg-rose-500/20 w-full text-left border border-rose-500/20"
+          >
+            <LogOut class="w-4 h-4 text-rose-400" />
+            <span>Sign Out</span>
+          </button>
         </nav>
 
         <!-- User Profile Pill in Sidebar Footer -->
-        <div class="p-3.5 border-t border-white/10 bg-black/35 space-y-2">
+        <div class="p-3.5 pb-8 lg:pb-3.5 border-t border-white/10 bg-black/45 space-y-2 shrink-0">
           <div class="p-2.5 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md flex items-center justify-between">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-xs flex items-center justify-center shrink-0 border border-white/20 shadow-sm">
@@ -192,7 +205,7 @@
           <!-- Prominent Full-Width Mobile Logout Button -->
           <button
             @click="handleLogout"
-            class="w-full py-2 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+            class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-rose-900/40 border border-rose-400/30 active:scale-98"
           >
             <LogOut class="w-4 h-4" />
             <span>Sign Out</span>
@@ -282,7 +295,7 @@
             <div class="relative" ref="userDropdownRef">
               <button
                 type="button"
-                @click="userMenuOpen = !userMenuOpen"
+                @click="onUserAvatarClick"
                 class="flex items-center gap-2.5 pl-2 border-l border-white/10 focus:outline-none group cursor-pointer"
                 aria-label="User Account Menu"
               >
@@ -345,7 +358,10 @@
     </div>
 
     <!-- Mobile Bottom Navigation Bar (Figma Design) -->
-    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15021B]/95 backdrop-blur-2xl border-t border-white/10 px-3 py-2 flex items-center justify-around shadow-2xl">
+    <nav
+      v-if="!mobileSidebarOpen && !mobileMoreSheetOpen"
+      class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15021B]/95 backdrop-blur-2xl border-t border-white/10 px-3 py-2 flex items-center justify-around shadow-2xl"
+    >
       <router-link
         to="/dashboard"
         class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all"
@@ -397,13 +413,139 @@
       </router-link>
 
       <button
-        @click="mobileSidebarOpen = true"
-        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all text-purple-200/60 hover:text-white"
+        @click="mobileMoreSheetOpen = true"
+        class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all text-purple-200/60 hover:text-white cursor-pointer"
       >
         <Menu class="w-4 h-4" />
         <span class="text-[10px] font-semibold tracking-tight">More</span>
       </button>
     </nav>
+
+    <!-- Mobile More / Account Slide-Up Sheet -->
+    <div
+      v-if="mobileMoreSheetOpen"
+      class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex flex-col justify-end lg:hidden animate-in fade-in duration-200"
+      @click.self="mobileMoreSheetOpen = false"
+    >
+      <div
+        class="bg-[#1A0322] border-t border-white/20 rounded-t-3xl p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto"
+      >
+        <!-- Drag Handle / Dismiss bar -->
+        <div class="flex justify-center -mt-2 mb-1">
+          <div class="w-12 h-1.5 rounded-full bg-white/20"></div>
+        </div>
+
+        <!-- User Profile Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-white/10">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-vb-magenta to-vb-plum text-white font-bold text-base flex items-center justify-center shrink-0 border border-white/20 shadow-md">
+              {{ userInitials }}
+            </div>
+            <div class="min-w-0">
+              <span class="block text-sm font-bold text-white truncate">{{ authStore.user?.name }}</span>
+              <span class="block text-xs text-purple-200/60 truncate">{{ authStore.user?.email }}</span>
+              <span
+                class="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border"
+                :class="authStore.isAdmin ? 'bg-vb-magenta/20 text-pink-200 border-vb-magenta/40' : (authStore.isTeamLead ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' : 'bg-white/10 text-white/80 border-white/15')"
+              >
+                {{ authStore.isAdmin ? 'Administrator' : (authStore.isTeamLead ? 'Team Lead' : 'Solutions Desk') }}
+              </span>
+            </div>
+          </div>
+          <button
+            @click="mobileMoreSheetOpen = false"
+            class="p-2 text-purple-300 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Navigation Links in More Sheet -->
+        <div class="space-y-1">
+          <router-link
+            to="/dashboard"
+            @click="mobileMoreSheetOpen = false"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <LayoutDashboard class="w-4 h-4 text-purple-300" />
+            <span>Dashboard</span>
+          </router-link>
+
+          <router-link
+            to="/leads"
+            @click="mobileMoreSheetOpen = false"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Users class="w-4 h-4 text-purple-300" />
+            <span>Leads Pipeline</span>
+          </router-link>
+
+          <router-link
+            to="/follow-ups"
+            @click="mobileMoreSheetOpen = false"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <CalendarClock class="w-4 h-4 text-purple-300" />
+            <span>Follow-ups</span>
+          </router-link>
+
+          <router-link
+            to="/notifications"
+            @click="mobileMoreSheetOpen = false"
+            class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <BellRing class="w-4 h-4 text-purple-300" />
+            <span>Notifications</span>
+          </router-link>
+
+          <!-- Admin-only links -->
+          <template v-if="authStore.isAdmin">
+            <div class="pt-2 pb-1 px-3.5">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-purple-200/40">Administration</span>
+            </div>
+
+            <router-link
+              to="/employees"
+              @click="mobileMoreSheetOpen = false"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <UserCheck class="w-4 h-4 text-purple-300" />
+              <span>Staff &amp; Access Controls</span>
+            </router-link>
+
+            <router-link
+              to="/import"
+              @click="mobileMoreSheetOpen = false"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <FileSpreadsheet class="w-4 h-4 text-purple-300" />
+              <span>Excel / CSV Ingestion</span>
+            </router-link>
+
+            <router-link
+              to="/settings"
+              @click="mobileMoreSheetOpen = false"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-purple-200/80 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <Settings class="w-4 h-4 text-purple-300" />
+              <span>CRM Settings &amp; Templates</span>
+            </router-link>
+          </template>
+        </div>
+
+        <!-- Prominent Logout Button -->
+        <div class="pt-2 pb-3">
+          <button
+            type="button"
+            @click="handleLogout"
+            class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-rose-950/50 border border-rose-400/30 active:scale-98 transition-all cursor-pointer"
+          >
+            <LogOut class="w-4 h-4" />
+            <span>Sign Out of CRM Desk</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Active 5-minute Reminder Alert Modal -->
     <ActiveReminderModal
@@ -454,6 +596,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const mobileSidebarOpen = ref(false);
+const mobileMoreSheetOpen = ref(false);
 const userMenuOpen = ref(false);
 const userDropdownRef = ref<HTMLElement | null>(null);
 const logoUrl = ref('/favicon.jpg');
@@ -520,7 +663,18 @@ const handleManualSync = async () => {
   }
 };
 
+const onUserAvatarClick = () => {
+  if (window.innerWidth < 1024) {
+    mobileMoreSheetOpen.value = true;
+  } else {
+    userMenuOpen.value = !userMenuOpen.value;
+  }
+};
+
 const handleLogout = async () => {
+  mobileSidebarOpen.value = false;
+  mobileMoreSheetOpen.value = false;
+  userMenuOpen.value = false;
   await authStore.logout();
   router.push('/login');
 };

@@ -25,7 +25,9 @@ class AuthController extends Controller
 
         // Establish stateful browser session
         Auth::guard('web')->login($user, remember: true);
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         return response()->json([
             'message' => 'Web desk session authenticated successfully',

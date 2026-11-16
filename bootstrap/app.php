@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'web.rbac' => \App\Http\Middleware\EnsureWebDeskRbacSession::class,
         ]);
         $middleware->validateCsrfTokens(except: [
+            'api/auth/web-login',
             'api/auth/mobile-login',
             'api/auth/login',
             'api/mobile/*',

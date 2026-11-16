@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 
 // Public routes
 Route::prefix('auth')->group(function () {
-    Route::post('/web-login', [AuthController::class, 'webLogin']);
+    Route::post('/web-login', [AuthController::class, 'webLogin'])->middleware('web');
     Route::post('/mobile-login', [AuthController::class, 'mobileLogin']);
     Route::post('/login', [AuthController::class, 'login']);
 });

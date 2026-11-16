@@ -2,13 +2,10 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -28,10 +25,12 @@ class User extends Authenticatable
         'password',
         'must_change_password',
         'role',
-        'role_id',
-        'team_id',
         'is_active',
         'notification_preferences',
+        'allowed_sources',
+        'allowed_services',
+        'team_members',
+        'assignable_users',
     ];
 
     /**
@@ -57,27 +56,181 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
             'notification_preferences' => 'array',
+            'allowed_sources' => 'array',
+            'allowed_services' => 'array',
+            'team_members' => 'array',
+            'assignable_users' => 'array',
         ];
-    }
-
-    public function roleRelation(): BelongsTo
-    {
-        return $this->belongsTo(Role::class, 'role_id');
-    }
-
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class, 'team_id');
     }
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin' || ($this->roleRelation && $this->roleRelation->name === 'admin');
+        return $this->role === 'admin';
+    }
+
+    public function isTeamLead(): bool
+    {
+        return $this->role === 'team_lead';
     }
 
     public function isEmployee(): bool
     {
-        return !$this->isAdmin();
+        return $this->role === 'employee';
+    }
+
+    public function hasPermission(string $permissionName): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if ($this->isTeamLead()) {
+            return in_array($permissionName, [
+                'leads.view',
+                'leads.create',
+                'leads.edit',
+                'leads.assign',
+                'leads.export',
+                'follow_ups.manage',
+            ], true);
+        }
+
+        // Standard Employee
+        return in_array($permissionName, [
+            'leads.view',
+            'leads.create',
+            'leads.edit',
+            'follow_ups.manage',
+        ], true);
+    }
+
+    public function getEffectiveVisibilityScope(): string
+    {
+        if ($this->isAdmin()) {
+            return 'all';
+        }
+
+        if ($this->isTeamLead()) {
+            return 'team_only';
+        }
+
+        return 'assigned_only';
+    }
+
+    /**
+     * Get team member user IDs whose leads this team lead can supervise (always includes self).
+     *
+     * @return list<int>
+     */
+    public function getTeamMemberIds(): array
+    {
+        if ($this->isTeamLead()) {
+            $members = is_array($this->team_members) ? $this->team_members : [];
+            $ids = array_merge([(int)$this->id], array_map('intval', $members));
+            return array_values(array_unique($ids));
+        }
+
+        return [(int)$this->id];
+    }
+
+    /**
+     * Alias for getTeamMemberIds()
+     *
+     * @return list<int>
+     */
+    public function teamMemberIds(): array
+    {
+        return $this->getTeamMemberIds();
+    }
+
+    /**
+     * Get user IDs to whom this user can assign leads.
+     *
+     * @return list<int>
+     */
+    public function getAssignableUserIds(): array
+    {
+        if ($this->isAdmin()) {
+            return static::where('is_active', true)->pluck('id')->map(fn($id) => (int)$id)->all();
+        }
+
+        if ($this->isTeamLead()) {
+            if (!empty($this->assignable_users) && is_array($this->assignable_users)) {
+                $ids = array_merge([(int)$this->id], array_map('intval', $this->assignable_users));
+                return array_values(array_unique($ids));
+            }
+            return $this->getTeamMemberIds();
+        }
+
+        return [(int)$this->id];
+    }
+
+    /**
+     * Check whether this user can assign a lead to target user.
+     */
+    public function canAssignTo(int $targetUserId): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if ($this->isTeamLead()) {
+            return in_array($targetUserId, $this->getAssignableUserIds(), true);
+        }
+
+        return $targetUserId === (int)$this->id;
+    }
+
+    /**
+     * Check if user is authorized to access a specific lead based on role, assignment, team delegation, and configured category/source permissions.
+     */
+    public function canAccessLead(Lead $lead): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        if ($this->isTeamLead()) {
+            $teamIds = $this->getTeamMemberIds();
+            if (!$lead->assigned_to || !in_array((int)$lead->assigned_to, $teamIds, true)) {
+                return false;
+            }
+
+            if (!empty($this->allowed_sources) && is_array($this->allowed_sources)) {
+                if (!in_array($lead->source, $this->allowed_sources, true)) {
+                    return false;
+                }
+            }
+
+            if (!empty($this->allowed_services) && is_array($this->allowed_services)) {
+                if (!in_array($lead->service_interest, $this->allowed_services, true)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Employee: strict isolation to self
+        if ((int)$lead->assigned_to !== (int)$this->id) {
+            return false;
+        }
+
+        // Allowed Sources (Mandatory constraint for employees if configured)
+        if (!empty($this->allowed_sources) && is_array($this->allowed_sources)) {
+            if (!in_array($lead->source, $this->allowed_sources, true)) {
+                return false;
+            }
+        }
+
+        // Allowed Services (Optional constraint: only restricts if explicitly configured)
+        if (!empty($this->allowed_services) && is_array($this->allowed_services)) {
+            if (!in_array($lead->service_interest, $this->allowed_services, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function assignedLeads(): HasMany
@@ -108,212 +261,5 @@ class User extends Authenticatable
     public function deviceTokens(): HasMany
     {
         return $this->hasMany(DeviceToken::class, 'user_id');
-    }
-
-    /**
-     * Check if user has a specific permission.
-     * Follows the strict hierarchy: User Explicit Override (Allow/Deny) -> Role Template -> Default Fallback.
-     */
-    public function hasPermission(string $permissionName): bool
-    {
-        if ($this->isAdmin()) {
-            return true;
-        }
-
-        // 1. User Explicit Overrides (Highest Precedence)
-        $override = DB::table('user_has_permissions')
-            ->join('permissions', 'user_has_permissions.permission_id', '=', 'permissions.id')
-            ->where('user_has_permissions.user_id', $this->id)
-            ->where('permissions.name', $permissionName)
-            ->value('user_has_permissions.effect');
-
-        if ($override === 'deny') {
-            return false;
-        }
-        if ($override === 'allow') {
-            return true;
-        }
-
-        // 2. Inherited Role Template
-        if ($this->role_id) {
-            $hasRolePerm = DB::table('role_has_permissions')
-                ->join('permissions', 'role_has_permissions.permission_id', '=', 'permissions.id')
-                ->where('role_has_permissions.role_id', $this->role_id)
-                ->where('permissions.name', $permissionName)
-                ->exists();
-
-            return $hasRolePerm;
-        }
-
-        // 3. Fallback baseline for standard employees
-        $defaultEmployeePermissions = [
-            'leads.view',
-            'leads.create',
-            'leads.edit',
-            'follow_ups.manage',
-            'whatsapp.send',
-        ];
-
-        return in_array($permissionName, $defaultEmployeePermissions);
-    }
-
-    /**
-     * Retrieve all effective permission names for this user.
-     */
-    public function getEffectivePermissions(): array
-    {
-        if ($this->isAdmin()) {
-            return Permission::pluck('name')->toArray();
-        }
-
-        $allPermissions = Permission::all();
-        $granted = [];
-
-        foreach ($allPermissions as $perm) {
-            if ($this->hasPermission($perm->name)) {
-                $granted[] = $perm->name;
-            }
-        }
-
-        return $granted;
-    }
-
-    /**
-     * Resolve effective visibility scope: 'assigned_only', 'team_only', or 'all'.
-     */
-    public function getEffectiveVisibilityScope(): string
-    {
-        if ($this->isAdmin()) {
-            return 'all';
-        }
-
-        // 1. User explicit visibility override
-        $userScope = DB::table('user_visibility_overrides')
-            ->where('user_id', $this->id)
-            ->value('scope');
-
-        if ($userScope && $userScope !== 'inherit') {
-            return $userScope;
-        }
-
-        // 2. Role template visibility scope
-        if ($this->roleRelation) {
-            return $this->roleRelation->getVisibilityScope();
-        }
-
-        // 3. Default invariant: assigned_only
-        return 'assigned_only';
-    }
-
-    /**
-     * Resolve effective allowed lead/service categories.
-     * Returns null for unrestricted (all categories allowed), or string array of allowed category names.
-     */
-    public function getEffectiveAllowedCategories(): ?array
-    {
-        if ($this->isAdmin()) {
-            return null;
-        }
-
-        // User explicit allow overrides
-        $userAllowed = DB::table('user_category_assignments')
-            ->where('user_id', $this->id)
-            ->where('is_allowed', true)
-            ->pluck('category_name')
-            ->toArray();
-
-        // User explicit deny overrides
-        $userDenied = DB::table('user_category_assignments')
-            ->where('user_id', $this->id)
-            ->where('is_allowed', false)
-            ->pluck('category_name')
-            ->toArray();
-
-        // Role allowed categories
-        $roleCategories = $this->roleRelation ? $this->roleRelation->getAllowedCategories() : [];
-
-        // If neither user nor role has restrictions, unrestricted
-        if (empty($roleCategories) && empty($userAllowed) && empty($userDenied)) {
-            return null;
-        }
-
-        $effective = !empty($userAllowed) ? $userAllowed : $roleCategories;
-
-        if (!empty($userDenied)) {
-            $effective = array_values(array_diff($effective, $userDenied));
-        }
-
-        return array_values(array_unique(array_filter(array_map('trim', $effective))));
-    }
-
-    /**
-     * Check if a specific service category/vertical is permitted for this user.
-     * Null or empty category is strictly disallowed if the user is category-restricted.
-     */
-    public function isCategoryAllowed(?string $category): bool
-    {
-        if ($this->isAdmin()) {
-            return true;
-        }
-
-        $allowedCats = $this->getEffectiveAllowedCategories();
-        if ($allowedCats === null) {
-            return true;
-        }
-
-        $normCat = Lead::normalizeCategory($category);
-        if ($normCat === null) {
-            return false;
-        }
-
-        $normalizedAllowed = array_values(array_filter(array_map([Lead::class, 'normalizeCategory'], $allowedCats)));
-        return in_array($normCat, $normalizedAllowed, true);
-    }
-
-    /**
-     * Team member IDs helper.
-     */
-    public function teamMemberIds(): array
-    {
-        if (!$this->team_id) {
-            return [$this->id];
-        }
-
-        return static::where('team_id', $this->team_id)->pluck('id')->toArray();
-    }
-
-    /**
-     * Centralized lead access determination.
-     */
-    public function canAccessLead(Lead $lead): bool
-    {
-        if ($this->isAdmin()) {
-            return true;
-        }
-
-        if (!$this->hasPermission('leads.view')) {
-            return false;
-        }
-
-        // Check category restriction
-        if (!$this->isCategoryAllowed($lead->service_interest)) {
-            return false;
-        }
-
-        // Check visibility scope
-        $scope = $this->getEffectiveVisibilityScope();
-        if ($scope === 'all') {
-            return true;
-        }
-
-        if ($scope === 'team_only') {
-            if ($this->team_id && $lead->assigned_to) {
-                return in_array($lead->assigned_to, $this->teamMemberIds());
-            }
-            return $lead->assigned_to === $this->id;
-        }
-
-        // Default: assigned_only
-        return $lead->assigned_to === $this->id;
     }
 }

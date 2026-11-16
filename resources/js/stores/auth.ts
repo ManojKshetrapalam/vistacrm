@@ -45,7 +45,8 @@ export const useAuthStore = defineStore('auth', {
       return !!state.user;
     },
     isAdmin: (state) => state.user?.role === 'admin' || state.user?.role_name === 'admin',
-    isEmployee: (state) => state.user?.role !== 'admin' && state.user?.role_name !== 'admin',
+    isTeamLead: (state) => state.user?.role === 'team_lead' || state.user?.role_name === 'team_lead',
+    isEmployee: (state) => state.user?.role === 'employee' || (!state.user?.role?.includes('admin') && !state.user?.role?.includes('team_lead')),
     can: (state) => (permission: string): boolean => {
       if (state.user?.role === 'admin' || state.user?.role_name === 'admin') return true;
       return (state.user?.permissions || []).includes(permission);

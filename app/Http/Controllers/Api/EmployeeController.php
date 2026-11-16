@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\EnsureWebDeskRbacSession;
 use App\Models\DeviceToken;
 use App\Models\FollowUp;
 use App\Models\Lead;
 use App\Models\LeadActivity;
-use App\Models\PermissionAuditLog;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -22,12 +20,12 @@ class EmployeeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && !$user->hasPermission('employees.manage')) {
+        if (!$user->isAdmin()) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
         $now = Carbon::now();
-        $employees = User::with(['roleRelation', 'team'])
+        $employees = User::query()
             ->orderBy('role', 'asc')
             ->orderBy('name', 'asc')
             ->get()
@@ -49,13 +47,14 @@ class EmployeeController extends Controller
                     'email' => $emp->email,
                     'phone' => $emp->phone,
                     'role' => $emp->role,
-                    'role_id' => $emp->role_id,
-                    'role_name' => $emp->roleRelation?->name ?? $emp->role,
-                    'role_display_name' => $emp->roleRelation?->display_name ?? ucfirst($emp->role),
-                    'team_id' => $emp->team_id,
-                    'team_name' => $emp->team?->name,
+                    'role_name' => $emp->role,
+                    'role_display_name' => $emp->role === 'admin' ? 'Administrator' : ($emp->role === 'team_lead' ? 'Team Lead' : 'Employee'),
                     'is_active' => (bool)$emp->is_active,
-                    'created_at' => $emp->created_at->format('Y-m-d'),
+                    'allowed_sources' => $emp->allowed_sources ?? [],
+                    'allowed_services' => $emp->allowed_services ?? [],
+                    'team_members' => $emp->team_members ?? [],
+                    'assignable_users' => $emp->assignable_users ?? [],
+                    'created_at' => $emp->created_at ? $emp->created_at->format('Y-m-d') : null,
                     'stats' => [
                         'assigned_leads' => $assignedLeadsCount,
                         'converted_leads' => $convertedCount,
@@ -71,7 +70,7 @@ class EmployeeController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && !$user->hasPermission('employees.manage')) {
+        if (!$user->isAdmin()) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -80,96 +79,42 @@ class EmployeeController extends Controller
             'email' => 'required|email|unique:users,email',
             'phone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8',
-            'role' => 'nullable|in:admin,employee',
-            'role_id' => 'nullable|exists:roles,id',
-            'team_id' => 'nullable|exists:teams,id',
+            'role' => 'required|in:admin,team_lead,employee',
+            'allowed_sources' => 'nullable|array',
+            'allowed_services' => 'nullable|array',
+            'team_members' => 'nullable|array',
+            'assignable_users' => 'nullable|array',
         ]);
 
-        $submittedRoleId = (array_key_exists('role_id', $validated) && $validated['role_id'] !== null && $validated['role_id'] !== '')
-            ? (int) $validated['role_id']
-            : null;
-        $submittedRole = (array_key_exists('role', $validated) && !empty($validated['role']))
-            ? trim((string) $validated['role'])
-            : null;
-        $submittedTeamId = (array_key_exists('team_id', $validated) && $validated['team_id'] !== null && $validated['team_id'] !== '')
-            ? (int) $validated['team_id']
-            : null;
-
-        // Resolve role template from DB
-        $roleModel = null;
-        if ($submittedRoleId !== null) {
-            $roleModel = \App\Models\Role::find($submittedRoleId);
-        } elseif ($submittedRole !== null) {
-            $roleModel = \App\Models\Role::where('name', $submittedRole)->first();
-        }
-
-        $effectiveRoleString = 'employee';
-        $effectiveRoleId = null;
-        if ($roleModel) {
-            $effectiveRoleId = $roleModel->id;
-            $effectiveRoleString = $roleModel->name === 'admin' ? 'admin' : 'employee';
-        } elseif ($submittedRole === 'admin') {
-            $effectiveRoleString = 'admin';
-        }
-
-        // Determine if privileged role or team assignment is being attempted
-        $isPrivilegedRole = ($effectiveRoleId !== null) || ($effectiveRoleString === 'admin');
-        $isTeamAssigned = ($submittedTeamId !== null);
-
-        if ($isPrivilegedRole || $isTeamAssigned) {
-            // 1. Require authentic Web Desk session
-            if (!EnsureWebDeskRbacSession::isWebDeskSession($request)) {
-                return response()->json([
-                    'message' => 'Web-only authorization administration: Assigning employee roles or teams requires an active Web Desk browser session.',
-                    'error_code' => 'MOBILE_RBAC_FORBIDDEN',
-                ], 403);
-            }
-
-            // 2. Require administrator or 'roles.manage' permission
-            if (!$user->isAdmin() && !$user->hasPermission('roles.manage')) {
-                return response()->json([
-                    'message' => 'Unauthorized. You lack permission to assign employee roles or teams.',
-                    'error_code' => 'INSUFFICIENT_PERMISSIONS',
-                ], 403);
+        if (in_array($validated['role'], ['employee', 'team_lead'], true)) {
+            if (empty($validated['allowed_sources']) || !is_array($validated['allowed_sources']) || count($validated['allowed_sources']) === 0) {
+                return response()->json(['message' => 'Allowed Lead Sources is mandatory. Please select at least one source.'], 422);
             }
         }
 
-        $employee = DB::transaction(function () use ($validated, $user, $effectiveRoleString, $effectiveRoleId, $submittedTeamId, $request) {
-            $emp = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'] ?? null,
-                'password' => Hash::make($validated['password']),
-                'role' => $effectiveRoleString,
-                'role_id' => $effectiveRoleId,
-                'team_id' => $submittedTeamId,
-                'is_active' => true,
-                'notification_preferences' => [
-                    'whatsapp_enabled' => true,
-                    'email_enabled' => true,
-                    'in_app_enabled' => true,
-                    'phone_for_notifications' => $validated['phone'] ?? null,
-                ],
-            ]);
+        if ($validated['role'] === 'team_lead') {
+            if (empty($validated['team_members']) || !is_array($validated['team_members']) || count($validated['team_members']) === 0) {
+                return response()->json(['message' => 'Supervised Team Members is mandatory for Team Leads.'], 422);
+            }
+        }
 
-            PermissionAuditLog::record(
-                $user->id,
-                'user',
-                $emp->id,
-                'employee_created',
-                [
-                    'role' => $emp->role,
-                    'role_id' => $emp->role_id,
-                    'team_id' => $emp->team_id,
-                ],
-                $request->ip()
-            );
-
-            return $emp;
-        });
+        $employee = User::create([
+            'name' => $validated['name'],
+            'username' => explode('@', $validated['email'])[0],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'is_active' => true,
+            'must_change_password' => false,
+            'allowed_sources' => $validated['allowed_sources'] ?? [],
+            'allowed_services' => $validated['allowed_services'] ?? [],
+            'team_members' => $validated['team_members'] ?? [],
+            'assignable_users' => !empty($validated['assignable_users']) ? $validated['assignable_users'] : ($validated['team_members'] ?? []),
+        ]);
 
         return response()->json([
-            'message' => 'Employee account created successfully',
+            'message' => 'Employee account created successfully.',
             'employee' => $employee,
         ], 201);
     }
@@ -177,7 +122,7 @@ class EmployeeController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
+        if (!$currentUser->isAdmin()) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
@@ -186,237 +131,184 @@ class EmployeeController extends Controller
             'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
             'phone' => 'nullable|string|max:20',
             'password' => 'nullable|string|min:8',
-            'role' => 'nullable|in:admin,employee',
-            'role_id' => 'nullable|exists:roles,id',
-            'team_id' => 'nullable|exists:teams,id',
+            'role' => 'nullable|in:admin,team_lead,employee',
             'is_active' => 'sometimes|required|boolean',
+            'allowed_sources' => 'nullable|array',
+            'allowed_services' => 'nullable|array',
+            'team_members' => 'nullable|array',
+            'assignable_users' => 'nullable|array',
         ]);
 
+        // Invariant: cannot deactivate self
         if (isset($validated['is_active']) && $user->id === $currentUser->id && !$validated['is_active']) {
             return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
         }
 
-        $currentRoleId = $user->role_id !== null ? (int) $user->role_id : null;
-        $currentRole = !empty($user->role) ? trim((string) $user->role) : 'employee';
-        $currentTeamId = $user->team_id !== null ? (int) $user->team_id : null;
-
-        // Normalize submitted values
-        $newRoleId = $currentRoleId;
-        $newRole = $currentRole;
-        $roleIdExplicitlySubmitted = array_key_exists('role_id', $validated);
-        $roleExplicitlySubmitted = array_key_exists('role', $validated);
-
-        if ($roleIdExplicitlySubmitted) {
-            $submittedRoleId = ($validated['role_id'] !== null && $validated['role_id'] !== '')
-                ? (int) $validated['role_id']
-                : null;
-            $newRoleId = $submittedRoleId;
-
-            if ($submittedRoleId !== null) {
-                $roleModel = \App\Models\Role::find($submittedRoleId);
-                if ($roleModel) {
-                    $newRole = $roleModel->name === 'admin' ? 'admin' : 'employee';
-                }
-            } else {
-                // Explicit role removal reverts to base employee role
-                $newRole = 'employee';
-            }
-        } elseif ($roleExplicitlySubmitted) {
-            $submittedRole = !empty($validated['role']) ? trim((string) $validated['role']) : 'employee';
-            $newRole = $submittedRole;
-            $roleModel = \App\Models\Role::where('name', $submittedRole)->first();
-            $newRoleId = $roleModel?->id;
-        }
-
-        $teamExplicitlySubmitted = array_key_exists('team_id', $validated);
-        $newTeamId = $currentTeamId;
-        if ($teamExplicitlySubmitted) {
-            $newTeamId = ($validated['team_id'] !== null && $validated['team_id'] !== '')
-                ? (int) $validated['team_id']
-                : null;
-        }
-
-        // Detect actual authorization-affecting changes
-        $roleChanging = ($newRoleId !== $currentRoleId) || ($newRole !== $currentRole);
-        $teamChanging = ($newTeamId !== $currentTeamId);
-
-        if ($roleChanging || $teamChanging) {
-            // 1. Require authentic Web Desk session
-            if (!EnsureWebDeskRbacSession::isWebDeskSession($request)) {
-                return response()->json([
-                    'message' => 'Web-only authorization administration: Reassigning employee roles or teams requires an active Web Desk browser session.',
-                    'error_code' => 'MOBILE_RBAC_FORBIDDEN',
-                ], 403);
-            }
-
-            // 2. Require administrator or 'roles.manage' permission
-            if (!$currentUser->isAdmin() && !$currentUser->hasPermission('roles.manage')) {
-                return response()->json([
-                    'message' => 'Unauthorized. You lack permission to reassign employee roles or teams.',
-                    'error_code' => 'INSUFFICIENT_PERMISSIONS',
-                ], 403);
+        // Invariant: cannot deactivate last admin
+        if (isset($validated['is_active']) && !$validated['is_active'] && $user->isAdmin()) {
+            $activeAdmins = User::where('role', 'admin')->where('is_active', true)->count();
+            if ($activeAdmins <= 1) {
+                return response()->json(['message' => 'Cannot deactivate the last active administrator.'], 422);
             }
         }
 
-        DB::transaction(function () use (
-            $user, $validated, $currentUser, $request,
-            $currentRoleId, $newRoleId, $currentRole, $newRole, $currentTeamId, $newTeamId,
-            $roleChanging, $teamChanging
-        ) {
-            if (!empty($validated['name'])) {
-                $user->name = $validated['name'];
-            }
-            if (!empty($validated['email'])) {
-                $user->email = $validated['email'];
-            }
-            if (array_key_exists('phone', $validated)) {
-                $user->phone = $validated['phone'];
-            }
-            if (!empty($validated['password'])) {
-                $user->password = Hash::make($validated['password']);
-            }
+        // If deactivating, purge personal access tokens & device tokens
+        if (isset($validated['is_active']) && !$validated['is_active']) {
+            $user->tokens()->delete();
+            $user->deviceTokens()->delete();
+        }
 
-            $user->role_id = $newRoleId;
-            $user->role = $newRole;
-            $user->team_id = $newTeamId;
+        if (array_key_exists('name', $validated)) {
+            $user->name = $validated['name'];
+        }
+        if (array_key_exists('email', $validated)) {
+            $user->email = $validated['email'];
+        }
+        if (array_key_exists('phone', $validated)) {
+            $user->phone = $validated['phone'];
+        }
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+        if (array_key_exists('role', $validated) && !empty($validated['role'])) {
+            $user->role = $validated['role'];
+        }
+        if (array_key_exists('is_active', $validated)) {
+            $user->is_active = (bool)$validated['is_active'];
+        }
+        if (array_key_exists('allowed_sources', $validated)) {
+            $user->allowed_sources = $validated['allowed_sources'];
+        }
+        if (array_key_exists('allowed_services', $validated)) {
+            $user->allowed_services = $validated['allowed_services'];
+        }
+        if (array_key_exists('team_members', $validated)) {
+            $user->team_members = $validated['team_members'];
+        }
+        if (array_key_exists('assignable_users', $validated)) {
+            $user->assignable_users = $validated['assignable_users'];
+        }
 
-            if (isset($validated['is_active'])) {
-                $user->is_active = $validated['is_active'];
-            }
-
-            $user->save();
-
-            // Record audit logs for actual changes in same transaction
-            if ($roleChanging) {
-                PermissionAuditLog::record(
-                    $currentUser->id,
-                    'user',
-                    $user->id,
-                    'employee_role_changed',
-                    [
-                        'old_role' => $currentRole,
-                        'new_role' => $newRole,
-                        'old_role_id' => $currentRoleId,
-                        'new_role_id' => $newRoleId,
-                    ],
-                    $request->ip()
-                );
-            }
-
-            if ($teamChanging) {
-                PermissionAuditLog::record(
-                    $currentUser->id,
-                    'user',
-                    $user->id,
-                    'employee_team_changed',
-                    [
-                        'old_team_id' => $currentTeamId,
-                        'new_team_id' => $newTeamId,
-                    ],
-                    $request->ip()
-                );
-            }
-        });
+        $user->save();
 
         return response()->json([
-            'message' => 'Employee updated successfully',
-            'employee' => $user->fresh(['roleRelation', 'team']),
+            'message' => 'Employee account updated successfully.',
+            'employee' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'role_name' => $user->role,
+                'role_display_name' => $user->role === 'admin' ? 'Administrator' : ($user->role === 'team_lead' ? 'Team Lead' : 'Employee'),
+                'is_active' => (bool)$user->is_active,
+                'allowed_sources' => $user->allowed_sources ?? [],
+                'allowed_services' => $user->allowed_services ?? [],
+                'team_members' => $user->team_members ?? [],
+                'assignable_users' => $user->assignable_users ?? [],
+            ],
         ]);
     }
 
     public function toggleStatus(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
+        if (!$currentUser->isAdmin()) {
             return response()->json(['message' => 'Unauthorized.'], 403);
-        }
-
-        // Prevent deactivating the last active administrator
-        if ($user->isAdmin() && $user->is_active) {
-            $activeAdminsCount = User::where('role', 'admin')->where('is_active', true)->count();
-            if ($activeAdminsCount <= 1) {
-                return response()->json(['message' => 'Cannot deactivate the last active administrator.'], 422);
-            }
         }
 
         if ($user->id === $currentUser->id) {
             return response()->json(['message' => 'You cannot deactivate your own account.'], 422);
         }
 
-        $willDeactivate = $user->is_active;
-
-        if ($willDeactivate) {
-            // Invalidate active personal access tokens
-            $user->tokens()->delete();
-
-            // Invalidate mobile push device tokens
-            DeviceToken::where('user_id', $user->id)->delete();
+        if ($user->is_active && $user->isAdmin()) {
+            $activeAdmins = User::where('role', 'admin')->where('is_active', true)->count();
+            if ($activeAdmins <= 1) {
+                return response()->json(['message' => 'Cannot deactivate the last active administrator.'], 422);
+            }
         }
 
         $user->is_active = !$user->is_active;
+
+        if (!$user->is_active) {
+            $user->tokens()->delete();
+            $user->deviceTokens()->delete();
+        }
+
         $user->save();
 
         return response()->json([
-            'message' => "Account for {$user->name} " . ($user->is_active ? "reactivated" : "deactivated") . " successfully.",
-            'is_active' => $user->is_active,
-            'user' => $user,
+            'message' => $user->is_active ? 'Account activated successfully.' : 'Account deactivated successfully.',
+            'is_active' => (bool)$user->is_active,
         ]);
     }
 
-    public function assignedLeads(Request $request, User $user): JsonResponse
+    public function assignedLeads(User $user): JsonResponse
     {
-        $currentUser = $request->user();
-        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage')) {
-            return response()->json(['message' => 'Unauthorized.'], 403);
-        }
-
         $leads = Lead::where('assigned_to', $user->id)
-            ->select(['id', 'reference_id', 'name', 'company_name', 'status', 'priority', 'next_follow_up_date'])
-            ->get();
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'reference_id', 'name', 'phone', 'email', 'company_name', 'status', 'priority', 'source', 'service_interest', 'created_at']);
 
-        return response()->json([
-            'count' => $leads->count(),
-            'leads' => $leads,
-        ]);
+        return response()->json($leads);
     }
 
     public function reassignLeads(Request $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
-        if (!$currentUser->isAdmin() && !$currentUser->hasPermission('employees.manage') && !$currentUser->hasPermission('leads.assign')) {
+        if (!$currentUser->isAdmin()) {
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
         $validated = $request->validate([
-            'new_user_id' => 'required|exists:users,id',
+            'target_user_id' => 'required|exists:users,id',
+            'lead_ids' => 'nullable|array',
+            'lead_ids.*' => 'exists:leads,id',
         ]);
 
-        $newAssignee = User::findOrFail($validated['new_user_id']);
-        if (!$newAssignee->is_active) {
-            return response()->json(['message' => 'Target assignee must be an active user.'], 422);
+        $targetUser = User::findOrFail($validated['target_user_id']);
+        if (!$targetUser->is_active) {
+            return response()->json(['message' => 'Target assignee must be an active employee.'], 422);
         }
 
-        $affectedCount = Lead::where('assigned_to', $user->id)->count();
+        $query = Lead::where('assigned_to', $user->id);
+        if (!empty($validated['lead_ids'])) {
+            $query->whereIn('id', $validated['lead_ids']);
+        }
 
-        DB::transaction(function () use ($user, $newAssignee, $currentUser) {
-            $leads = Lead::where('assigned_to', $user->id)->get();
-            foreach ($leads as $lead) {
-                $lead->assigned_to = $newAssignee->id;
+        $leadsToReassign = $query->get();
+        $count = $leadsToReassign->count();
+
+        if ($count === 0) {
+            return response()->json(['message' => 'No matching leads found to reassign.', 'reassigned_count' => 0]);
+        }
+
+        DB::transaction(function () use ($leadsToReassign, $targetUser, $currentUser, $user) {
+            $now = Carbon::now();
+            foreach ($leadsToReassign as $lead) {
+                $lead->assigned_to = $targetUser->id;
+                $lead->version = ($lead->version ?? 1) + 1;
                 $lead->save();
 
                 LeadActivity::create([
                     'lead_id' => $lead->id,
                     'user_id' => $currentUser->id,
-                    'activity_type' => 'assignment_change',
-                    'title' => "Reassigned to {$newAssignee->name}",
-                    'description' => "Account reassigned from {$user->name} to {$newAssignee->name} by {$currentUser->name}.",
+                    'type' => 'assignment_changed',
+                    'description' => "Lead reassigned from {$user->name} to {$targetUser->name} by {$currentUser->name}.",
+                    'metadata' => [
+                        'from_user_id' => $user->id,
+                        'from_user_name' => $user->name,
+                        'to_user_id' => $targetUser->id,
+                        'to_user_name' => $targetUser->name,
+                        'reassigned_by' => $currentUser->name,
+                    ],
+                    'created_at' => $now,
                 ]);
             }
         });
 
         return response()->json([
-            'message' => "Successfully reassigned {$affectedCount} leads to {$newAssignee->name}.",
-            'reassigned_count' => $affectedCount,
+            'message' => "Successfully reassigned {$count} lead(s) to {$targetUser->name}.",
+            'reassigned_count' => $count,
         ]);
     }
 }

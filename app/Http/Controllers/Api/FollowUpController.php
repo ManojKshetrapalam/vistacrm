@@ -348,7 +348,11 @@ class FollowUpController extends Controller
         ])->where('status', 'pending');
 
         if (!$user->isAdmin()) {
-            $query->where('user_id', $user->id);
+            if ($user->isTeamLead()) {
+                $query->whereIn('user_id', $user->getTeamMemberIds());
+            } else {
+                $query->where('user_id', $user->id);
+            }
         }
 
         $allPending = $query->orderBy('scheduled_at', 'asc')->get();

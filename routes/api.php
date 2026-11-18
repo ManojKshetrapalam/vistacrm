@@ -71,8 +71,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/follow-ups/{followUp}/cancel', [FollowUpController::class, 'cancel']);
     Route::delete('/follow-ups/{followUp}', [FollowUpController::class, 'destroy']);
 
-    // Lead Import (Admin only enforced in controller)
+    // Lead Import
     Route::post('/import/upload-preview', [ImportController::class, 'uploadAndPreview']);
+    Route::post('/import/preview-duplicates', [ImportController::class, 'previewDuplicates']);
+    Route::get('/import/assignable-users', [ImportController::class, 'assignableUsers']);
     Route::post('/import/process', [ImportController::class, 'process']);
     Route::get('/import/history', [ImportController::class, 'history']);
     Route::get('/import/history/{history}/failed-report', [ImportController::class, 'downloadFailedReport']);

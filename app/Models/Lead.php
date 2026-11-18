@@ -121,6 +121,11 @@ class Lead extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    public function assignedTo(): BelongsTo
+    {
+        return $this->assignedEmployee();
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

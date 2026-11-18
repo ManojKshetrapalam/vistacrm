@@ -89,6 +89,146 @@ class LeadImportService
     }
 
     /**
+     * Pre-validate file and detect duplicate leads before processing.
+     */
+    public function validateAndPreviewDuplicates(string $filePath, string $extension, array $columnMapping, User $user): array
+    {
+        $allRows = $this->readRows($filePath, $extension);
+        if (empty($allRows) || count($allRows) < 2) {
+            throw new \Exception("The uploaded file does not contain any data rows.");
+        }
+
+        $headers = array_map('trim', array_map('strval', $allRows[0]));
+        $headerMap = array_flip($headers);
+
+        $nameCol = $columnMapping['name'] ?? null;
+        $phoneCol = $columnMapping['phone'] ?? null;
+        $emailCol = $columnMapping['email'] ?? null;
+        $companyCol = $columnMapping['company_name'] ?? null;
+        $sourceCol = $columnMapping['source'] ?? null;
+        $serviceCol = $columnMapping['service_interest'] ?? null;
+
+        if (!$nameCol || !isset($headerMap[$nameCol])) {
+            throw new \Exception("A column for 'Lead Name' must be mapped.");
+        }
+        if (!$phoneCol || !isset($headerMap[$phoneCol])) {
+            throw new \Exception("A column for 'Phone Number' must be mapped.");
+        }
+
+        // Map of existing phone numbers to their Lead model record
+        $existingLeadsByPhone = Lead::whereNotNull('phone_normalized')
+            ->with('assignedTo:id,name')
+            ->get(['id', 'reference_id', 'name', 'phone_normalized', 'company_name', 'assigned_to'])
+            ->keyBy('phone_normalized');
+
+        $seenPhonesInFile = [];
+        $duplicates = [];
+        $cleanLeads = [];
+        $invalidRows = [];
+
+        for ($i = 1; $i < count($allRows); $i++) {
+            $rowNum = $i + 1; // 1-based row number
+            $row = $allRows[$i];
+
+            $name = isset($headerMap[$nameCol]) ? trim((string)($row[$headerMap[$nameCol]] ?? '')) : '';
+            $phone = isset($headerMap[$phoneCol]) ? trim((string)($row[$headerMap[$phoneCol]] ?? '')) : '';
+            $email = ($emailCol && isset($headerMap[$emailCol])) ? trim((string)($row[$headerMap[$emailCol]] ?? '')) : null;
+            $company = ($companyCol && isset($headerMap[$companyCol])) ? trim((string)($row[$headerMap[$companyCol]] ?? '')) : null;
+            $source = ($sourceCol && isset($headerMap[$sourceCol])) ? trim((string)($row[$headerMap[$sourceCol]] ?? '')) : 'Excel Import';
+            $service = ($serviceCol && isset($headerMap[$serviceCol])) ? trim((string)($row[$headerMap[$serviceCol]] ?? '')) : null;
+
+            if (empty($name) || empty($phone)) {
+                $invalidRows[] = [
+                    'row' => $rowNum,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'reason' => 'Name or Phone is missing or empty.',
+                ];
+                continue;
+            }
+
+            // Category validation for restricted users
+            if ($user->getEffectiveAllowedCategories() !== null) {
+                if (empty($service) || !$user->isCategoryAllowed($service)) {
+                    $invalidRows[] = [
+                        'row' => $rowNum,
+                        'name' => $name,
+                        'phone' => $phone,
+                        'reason' => "Unauthorized category ('" . ($service ?: 'None') . "'). You are not authorized to import leads under this service vertical.",
+                    ];
+                    continue;
+                }
+            }
+
+            $normalizedPhone = Lead::normalizePhone($phone);
+            if (empty($normalizedPhone) || strlen($normalizedPhone) < 7) {
+                $invalidRows[] = [
+                    'row' => $rowNum,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'reason' => "Invalid phone number ('{$phone}'). Must have at least 7 digits.",
+                ];
+                continue;
+            }
+
+            // Check 1: In-file duplicate
+            if (isset($seenPhonesInFile[$normalizedPhone])) {
+                $duplicates[] = [
+                    'row' => $rowNum,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'phone_normalized' => $normalizedPhone,
+                    'conflict_type' => 'in_file',
+                    'matched_row' => $seenPhonesInFile[$normalizedPhone],
+                    'reason' => "Duplicate phone inside file (matches row #{$seenPhonesInFile[$normalizedPhone]}).",
+                ];
+                continue;
+            }
+            $seenPhonesInFile[$normalizedPhone] = $rowNum;
+
+            // Check 2: CRM Database duplicate
+            if (isset($existingLeadsByPhone[$normalizedPhone])) {
+                $existing = $existingLeadsByPhone[$normalizedPhone];
+                $duplicates[] = [
+                    'row' => $rowNum,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'phone_normalized' => $normalizedPhone,
+                    'conflict_type' => 'crm_database',
+                    'existing_lead_id' => $existing->id,
+                    'existing_reference_id' => $existing->reference_id,
+                    'existing_lead_name' => $existing->name,
+                    'existing_assigned_to' => $existing->assignedTo?->name ?? 'Unassigned',
+                    'reason' => "Already exists in CRM ({$existing->reference_id} · Assigned to " . ($existing->assignedTo?->name ?? 'Unassigned') . ").",
+                ];
+                continue;
+            }
+
+            // Clean Unique Lead
+            $cleanLeads[] = [
+                'row' => $rowNum,
+                'name' => $name,
+                'phone' => $phone,
+                'phone_normalized' => $normalizedPhone,
+                'email' => $email,
+                'company_name' => $company,
+                'source' => $source,
+                'service_interest' => $service,
+            ];
+        }
+
+        return [
+            'total_rows' => count($allRows) - 1,
+            'clean_count' => count($cleanLeads),
+            'duplicate_count' => count($duplicates),
+            'invalid_count' => count($invalidRows),
+            'duplicates' => $duplicates,
+            'invalid_rows' => $invalidRows,
+            'sample_clean_leads' => array_slice($cleanLeads, 0, 5),
+        ];
+    }
+
+    /**
      * Process full import with validation, duplicate detection, and batch insertion.
      */
     public function processImport(User $user, string $filePath, string $extension, array $columnMapping, array $options): array
@@ -120,12 +260,20 @@ class LeadImportService
         $skipDuplicates = !empty($options['skip_duplicates']);
         $assignmentMode = $options['assignment_mode'] ?? 'unassigned'; // 'unassigned', 'specific', 'round_robin'
         $assignedToUserId = $options['assigned_to'] ?? null;
+        $selectedAssignees = !empty($options['selected_assignee_ids']) && is_array($options['selected_assignee_ids'])
+            ? array_values(array_filter(array_map('intval', $options['selected_assignee_ids'])))
+            : [];
 
         $employees = [];
         if ($assignmentMode === 'round_robin') {
-            $employees = User::where('role', 'employee')->where('is_active', true)->pluck('id')->toArray();
+            if (!empty($selectedAssignees)) {
+                $employees = User::whereIn('id', $selectedAssignees)->where('is_active', true)->pluck('id')->toArray();
+            } else {
+                $employees = User::where('role', 'employee')->where('is_active', true)->pluck('id')->toArray();
+            }
         }
         $roundRobinIndex = 0;
+        $assignmentBreakdown = [];
 
         $existingPhones = Lead::pluck('phone_normalized')->filter()->flip()->toArray();
         $seenPhonesInFile = [];
@@ -236,6 +384,10 @@ class LeadImportService
                 $roundRobinIndex++;
             }
 
+            if ($assigneeId) {
+                $assignmentBreakdown[$assigneeId] = ($assignmentBreakdown[$assigneeId] ?? 0) + 1;
+            }
+
             $leadsToInsert[] = [
                 'name' => $name,
                 'phone' => $phone,
@@ -334,6 +486,20 @@ class LeadImportService
 
             DB::commit();
 
+            // Build human-readable assignment breakdown
+            $breakdownReport = [];
+            if (!empty($assignmentBreakdown)) {
+                $users = User::whereIn('id', array_keys($assignmentBreakdown))->get()->keyBy('id');
+                foreach ($assignmentBreakdown as $uId => $cnt) {
+                    $breakdownReport[] = [
+                        'user_id' => $uId,
+                        'name' => $users[$uId]->name ?? "User #{$uId}",
+                        'role' => $users[$uId]->role ?? 'employee',
+                        'count' => $cnt,
+                    ];
+                }
+            }
+
             return [
                 'history_id' => $history->id,
                 'total_rows' => $totalRows,
@@ -342,6 +508,7 @@ class LeadImportService
                 'invalid_count' => $invalidCount,
                 'skipped_count' => $skippedCount,
                 'failed_rows' => $failedRows,
+                'assignment_breakdown' => $breakdownReport,
             ];
         } catch (\Throwable $e) {
             DB::rollBack();

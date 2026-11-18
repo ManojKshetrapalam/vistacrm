@@ -19,7 +19,7 @@ class ImportController extends Controller
     public function uploadAndPreview(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import') && !$user->hasPermission('leads.create')) {
             return response()->json(['message' => 'Only administrators or authorized users can import leads.'], 403);
         }
 
@@ -57,10 +57,76 @@ class ImportController extends Controller
         }
     }
 
+    public function previewDuplicates(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import') && !$user->hasPermission('leads.create')) {
+            return response()->json(['message' => 'Only administrators or authorized users can preview import duplicates.'], 403);
+        }
+
+        $validated = $request->validate([
+            'file_token' => 'required|string',
+            'mapping' => 'required|array',
+        ]);
+
+        $fullPath = Storage::path($validated['file_token']);
+        if (!file_exists($fullPath)) {
+            return response()->json(['message' => 'Uploaded file session has expired. Please re-upload the file.'], 404);
+        }
+
+        $extension = pathinfo($fullPath, PATHINFO_EXTENSION);
+
+        try {
+            $analysis = $this->importService->validateAndPreviewDuplicates(
+                $fullPath,
+                $extension,
+                $validated['mapping'],
+                $user
+            );
+
+            return response()->json($analysis);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Duplicate analysis failed: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function assignableUsers(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import') && !$user->hasPermission('leads.create')) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $assignableIds = $user->getAssignableUserIds();
+        $users = \App\Models\User::whereIn('id', $assignableIds)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'role'])
+            ->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'role' => $u->role,
+                    'role_display' => $u->role === 'admin' ? 'Administrator' : ($u->role === 'team_lead' ? 'Team Lead' : 'Employee'),
+                    'active_leads_count' => \App\Models\Lead::where('assigned_to', $u->id)
+                        ->whereNull('deleted_at')
+                        ->whereNotIn('status', ['converted', 'lost'])
+                        ->count(),
+                ];
+            });
+
+        return response()->json([
+            'users' => $users,
+        ]);
+    }
+
     public function process(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->isAdmin() && !$user->hasPermission('leads.import')) {
+        if (!$user->isAdmin() && !$user->hasPermission('leads.import') && !$user->hasPermission('leads.create')) {
             return response()->json(['message' => 'Only administrators or authorized users can import leads.'], 403);
         }
 
@@ -70,12 +136,25 @@ class ImportController extends Controller
             'skip_duplicates' => 'nullable|boolean',
             'assignment_mode' => 'nullable|in:unassigned,specific,round_robin',
             'assigned_to' => 'nullable|exists:users,id',
+            'selected_assignee_ids' => 'nullable|array',
+            'selected_assignee_ids.*' => 'integer|exists:users,id',
         ]);
 
         if (($validated['assignment_mode'] ?? 'unassigned') === 'specific' && !empty($validated['assigned_to'])) {
+            if (!$user->canAssignTo((int)$validated['assigned_to'])) {
+                return response()->json(['message' => 'You are not authorized to assign leads to this user.'], 403);
+            }
             $assignee = \App\Models\User::find($validated['assigned_to']);
             if (!$assignee || !$assignee->is_active) {
                 return response()->json(['message' => 'Target assignee must be an active user.'], 422);
+            }
+        }
+
+        if (($validated['assignment_mode'] ?? 'unassigned') === 'round_robin' && !empty($validated['selected_assignee_ids'])) {
+            foreach ($validated['selected_assignee_ids'] as $uId) {
+                if (!$user->canAssignTo((int)$uId)) {
+                    return response()->json(['message' => "You are not authorized to assign leads to user #{$uId}."], 403);
+                }
             }
         }
 
@@ -96,6 +175,7 @@ class ImportController extends Controller
                     'skip_duplicates' => $validated['skip_duplicates'] ?? true,
                     'assignment_mode' => $validated['assignment_mode'] ?? 'unassigned',
                     'assigned_to' => $validated['assigned_to'] ?? null,
+                    'selected_assignee_ids' => $validated['selected_assignee_ids'] ?? [],
                 ]
             );
 
